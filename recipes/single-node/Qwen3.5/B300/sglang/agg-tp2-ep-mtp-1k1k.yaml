@@ -1,0 +1,91 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/qwen3.5_fp4_b300_mtp.sh
+name: "qwen3.5-397b-b300-fp4-agg-tp2-ep-mtp-1k1k"
+
+model:
+  path: "hf:nvidia/Qwen3.5-397B-A17B-NVFP4"
+  container: "lmsysorg/sglang:v0.5.12-cu130"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Qwen3.5-397B-A17B-NVFP4"
+    revision: "67eb9fda23a430b41f629c016c96fdc7bcbd43f5"
+  container:
+    image: "lmsysorg/sglang:v0.5.12-cu130"
+  frameworks:
+    sglang: "0.5.12"
+
+dynamo:
+  install: false
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 2
+
+frontend:
+  type: sglang
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    NCCL_NVLS_ENABLE: "1"
+    SGL_ENABLE_JIT_DEEPGEMM: "false"
+    SGLANG_ENABLE_FLASHINFER_GEMM: "true"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "nvidia/Qwen3.5-397B-A17B-NVFP4"
+      trust-remote-code: true
+
+      tensor-parallel-size: 2
+      data-parallel-size: 1
+      ep-size: 2
+
+      reasoning-parser: qwen3
+      tool-call-parser: qwen3_coder
+
+      quantization: modelopt_fp4
+      fp4-gemm-backend: flashinfer_cutlass
+      kv-cache-dtype: fp8_e4m3
+      mamba-ssm-dtype: bfloat16
+      mamba-scheduler-strategy: no_buffer
+      attention-backend: trtllm_mha
+      mm-attention-backend: triton_attn
+      moe-runner-backend: flashinfer_trtllm
+
+      cuda-graph-max-bs: 128
+      max-running-requests: 128
+      mem-fraction-static: 0.8
+      chunked-prefill-size: 32768
+      max-prefill-tokens: 32768
+      context-length: 2068
+      disable-radix-cache: true
+      scheduler-recv-interval: 30
+      tokenizer-worker-num: 6
+      stream-interval: 30
+
+      speculative-algorithm: EAGLE
+      speculative-num-steps: 3
+      speculative-eagle-topk: 1
+      speculative-num-draft-tokens: 4
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "4x8x16x32x64x128"
+  req_rate: "inf"
+  use_chat_template: true

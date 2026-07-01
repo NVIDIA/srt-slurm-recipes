@@ -1,0 +1,73 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/minimaxm2.5_fp4_b300.sh
+name: "minimax-m2.5-b300-fp4-dp2-ep-1k1k"
+
+model:
+  path: "hf:nvidia/MiniMax-M2.5-NVFP4"
+  container: "vllm/vllm-openai:v0.22.0"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/MiniMax-M2.5-NVFP4"
+    revision: "b6220d658389629b9d507d4b2bb314f41fea7898"
+  container:
+    image: "vllm/vllm-openai:v0.22.0"
+  frameworks:
+    dynamo: "1.2.0.dev20260426"
+    vllm: "0.22.0"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 2
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    VLLM_FLOAT32_MATMUL_PRECISION: "high"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/MiniMax-M2.5-NVFP4"
+      tensor-parallel-size: 1
+      data-parallel-size: 2
+      enable-expert-parallel: true
+      gpu-memory-utilization: 0.90
+      max-model-len: 2200
+      block-size: 32
+      kv-cache-dtype: "fp8"
+      max-cudagraph-capture-size: 2048
+      max-num-batched-tokens: 2048
+      stream-interval: 20
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "128x256x512x1024x2048"
+  req_rate: "inf"
+  use_chat_template: true

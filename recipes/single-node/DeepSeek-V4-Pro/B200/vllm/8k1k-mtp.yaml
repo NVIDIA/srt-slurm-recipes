@@ -1,0 +1,90 @@
+# Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/dsv4_fp4_b200_vllm_mtp.sh
+
+name: "deepseek-v4-pro-fp4-vllm-b200-8k1k-mtp"
+
+model:
+  path: "hf:deepseek-ai/DeepSeek-V4-Pro"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.0-deepseek-v4-cuda13-dev.3"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "deepseek-ai/DeepSeek-V4-Pro"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.0-deepseek-v4-cuda13-dev.3"
+  frameworks:
+    dynamo: "1.2.0"
+    vllm: "0.20.1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    TILELANG_CLEANUP_TEMP_FILES: "1"
+    NCCL_CUMEM_ENABLE: "1"
+    VLLM_SERVER_DEV_MODE: "1"
+    VLLM_SPARSE_INDEXER_MAX_LOGITS_MB: "1024"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "deepseek-ai/DeepSeek-V4-Pro"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      enable-expert-parallel: "{ep}"
+      max-num-seqs: 1024
+      max-model-len: 9280
+      max-num-batched-tokens: 16384
+      max-cudagraph-capture-size: 1024
+      gpu-memory-utilization: 0.95
+      kv-cache-dtype: "fp8"
+      block-size: 256
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+      tokenizer-mode: deepseek_v4
+      reasoning-parser: deepseek_v4
+      attention-config: '{"use_fp4_indexer_cache":true}'
+      compilation-config: '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["all"]}'
+      speculative-config: '{"method":"mtp","num_speculative_tokens":2}'
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 1
+  use_chat_template: true
+  custom_tokenizer: "sa_bench_tokenizers.vllm_deepseek_v4.VLLMDeepseekV4Tokenizer"
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  ep: [true, false]

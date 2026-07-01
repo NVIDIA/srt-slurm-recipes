@@ -1,0 +1,11 @@
+**/__pycache__/**
+
+# DeepSeek-V4-Pro H200 SGLang recipes — pending validation (SGLang container fails under Docker)
+recipes/single-node/DeepSeek-V4-Pro/H200/sglang/
+
+# AI inference coverage tooling — keep local for now
+scripts/check_inference_coverage.py
+scripts/map_inference_row_to_recipe.py
+.agents/skills/ai-inference-coverage/
+ai-inference.md
+coverage-missing.md

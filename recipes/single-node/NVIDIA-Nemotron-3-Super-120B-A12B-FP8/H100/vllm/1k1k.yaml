@@ -1,0 +1,68 @@
+# Source: vLLM recipe "NVIDIA-Nemotron-3-Super-120B-A12B" (H100, FP8) - https://recipes.vllm.ai/
+name: "nemotron3-super-120b-a12b-fp8-vllm-h100-1k1k"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.1"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.1"
+  frameworks:
+    dynamo: "1.2.1"
+
+dynamo:
+  install: false
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "h100"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8"
+      tensor-parallel-size: "{tp}"
+      max-num-seqs: "{conc}"
+      kv-cache-dtype: fp8
+      max-model-len: 2304
+      gpu-memory-utilization: 0.9
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: true
+
+sweep:
+  conc: [1, 2, 4, 8, 16, 32, 64, 128, 256]
+  tp: [8]

@@ -1,0 +1,124 @@
+name: "gpt-oss-120b-trtllm-disagg-gb200-8k1k-dep2"
+
+# Upstream reference (InferenceX multi-node disagg launcher):
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/gptoss_fp4_gb200_dynamo-trt.sh
+
+model:
+  path: "hf:openai/gpt-oss-120b"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.7.0.post2"
+  precision: "fp4"
+
+dynamo:
+  install: false
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: true
+  args:
+    router-mode: "kv"
+
+resources:
+  gpu_type: "gb200"
+  gpus_per_node: 4
+
+  prefill_nodes: 1
+  prefill_workers: 2
+  gpus_per_prefill: 1
+
+  decode_nodes: 1
+  decode_workers: 1
+  gpus_per_decode: 2
+
+slurm:
+  time_limit: "04:00:00"
+
+backend:
+  type: trtllm
+
+  prefill_environment:
+    PYTHONUNBUFFERED: "1"
+    TRTLLM_ENABLE_PDL: "1"
+    OVERRIDE_QUANT_ALGO: "W4A8_MXFP4_MXFP8"
+    OMPI_MCA_coll_ucc_enable: "0"
+    NCCL_GRAPH_REGISTER: "0"
+    TLLM_LOG_LEVEL: "INFO"
+    CACHE_TRANSCEIVER_MAX_NUM_TOKENS: "8448"
+
+  decode_environment:
+    PYTHONUNBUFFERED: "1"
+    TRTLLM_ENABLE_PDL: "1"
+    OVERRIDE_QUANT_ALGO: "W4A8_MXFP4_MXFP8"
+    OMPI_MCA_coll_ucc_enable: "0"
+    NCCL_GRAPH_REGISTER: "0"
+    TLLM_LOG_LEVEL: "INFO"
+    CACHE_TRANSCEIVER_MAX_NUM_TOKENS: "8448"
+    # SA/dynamo DEP-only env (is_dep=true block; decode has attention_dp=true).
+    TRTLLM_MOE_ALLTOALL_BACKEND: "mnnvlthroughput"
+    TRTLLM_FORCE_ALLTOALL_METHOD: "MNNVL"
+    TRTLLM_MOE_A2A_WORKSPACE_MB: "2048"
+
+  trtllm_config:
+    prefill:
+      backend: "pytorch"
+      tensor_parallel_size: 1
+      moe_expert_parallel_size: 1
+      pipeline_parallel_size: 1
+      enable_attention_dp: false
+      max_batch_size: 32
+      max_num_tokens: 20000
+      max_seq_len: 8395
+      disable_overlap_scheduler: true
+      print_iter_log: true
+      num_postprocess_workers: 4
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 32
+      kv_cache_config:
+        enable_block_reuse: false
+        free_gpu_memory_fraction: 0.85
+        dtype: fp8
+      cache_transceiver_config:
+        backend: "UCX"
+        max_tokens_in_buffer: 8448
+      trust_remote_code: true
+
+    decode:
+      backend: "pytorch"
+      tensor_parallel_size: 2
+      moe_expert_parallel_size: 2
+      pipeline_parallel_size: 1
+      enable_attention_dp: true
+      disable_overlap_scheduler: false
+      max_batch_size: 512
+      max_num_tokens: 20000
+      max_seq_len: 9419
+      print_iter_log: true
+      stream_interval: 20
+      num_postprocess_workers: 4
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 512
+      moe_config:
+        backend: TRTLLM
+      kv_cache_config:
+        enable_block_reuse: false
+        free_gpu_memory_fraction: 0.9
+        dtype: fp8
+      cache_transceiver_config:
+        backend: "UCX"
+        max_tokens_in_buffer: 8448
+      trust_remote_code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [128, 512]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10

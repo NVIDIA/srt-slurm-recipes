@@ -1,0 +1,50 @@
+stages:
+  - validate
+
+dry-run-recipes:
+  stage: validate
+  image: python:3.11-bookworm
+  variables:
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+    SRT_SLURM_DIR: "$CI_PROJECT_DIR/srt-slurm"
+    RECIPES_ROOT: "$CI_PROJECT_DIR/recipes"
+    SRTCTL_WORKDIR: "$CI_PROJECT_DIR/srt-slurm"
+    SRTSLURM_CONFIG: "$CI_PROJECT_DIR/.ci/srtslurm.yaml"
+    DRY_RUN_LOG_DIR: "$CI_PROJECT_DIR/srt-dry-run-logs"
+    SRTCTL_OUTPUT_DIR: "$CI_PROJECT_DIR/srtctl-output"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - .gitlab-ci.yml
+        - recipes/**/*.yaml
+        - scripts/ci/dry_run_recipes.sh
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - .gitlab-ci.yml
+        - recipes/**/*.yaml
+        - scripts/ci/dry_run_recipes.sh
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  cache:
+    key:
+      files:
+        - .gitlab-ci.yml
+    paths:
+      - .uv-cache/
+  before_script:
+    - python --version
+    - python -m pip install --upgrade pip uv
+    - git clone --depth 1 https://github.com/NVIDIA/srt-slurm.git "$SRT_SLURM_DIR"
+    - cd "$SRT_SLURM_DIR"
+    - uv venv
+    - uv pip install -e .
+    - cd "$CI_PROJECT_DIR"
+  script:
+    - bash scripts/ci/dry_run_recipes.sh
+  artifacts:
+    when: always
+    name: "srt-dry-run-logs-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - srt-dry-run-logs/
+      - .ci/srtslurm.yaml
+    expire_in: 1 week

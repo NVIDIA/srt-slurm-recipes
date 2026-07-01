@@ -1,0 +1,83 @@
+# InferenceX reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/minimaxm3_fp4_b300_mtp.sh
+# It will appear after the following PR is merged:
+#   https://github.com/SemiAnalysisAI/InferenceX/pull/1929
+
+name: "minimax-m3-b300-fp4-agg-mtp-1k1k"
+
+model:
+  path: "hf:nvidia/MiniMax-M3-NVFP4"
+  container: "vllm/vllm-openai:vllm-minimax-m3-perf-x86_64-13.0.1-8b00f41"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/MiniMax-M3-NVFP4"
+    revision: "197d94618dda969e0feef95b0d306734a7ab0826"
+  container:
+    image: "vllm/vllm-openai:vllm-minimax-m3-perf-x86_64-13.0.1-8b00f41"
+  frameworks:
+    dynamo: "1.2.0.dev20260526"
+    vllm: "0.23.1rc1.dev424+g3f5a1e173"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260526"
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    VLLM_FLOAT32_MATMUL_PRECISION: "high"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/MiniMax-M3-NVFP4"
+      tensor-parallel-size: "{tp}"
+      enable-expert-parallel: "{ep}"
+      gpu-memory-utilization: 0.90
+      max-model-len: 2304
+      block-size: 128
+      language-model-only: true
+      max-cudagraph-capture-size: 2048
+      max-num-batched-tokens: 2048
+      speculative-config: '{"method": "eagle3", "model": "Inferact/MiniMax-M3-EAGLE3", "num_speculative_tokens": 3, "attention_backend": "FLASH_ATTN"}'
+      stream-interval: 20
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "1x2x4x8x16x32x64x128x256x512x1024"
+  req_rate: "inf"
+  use_chat_template: true
+
+# Mirrors the non-dp-attn rows of InferenceX PR #1929 for MiniMax-M3 NVFP4 B300
+# 1k1k: tp in {4, 8}, expert-parallel on/off. The grid (itertools.product) yields
+# 4 parallelism shapes: tp4 EP-off, tp4 EP-on, tp8 EP-off, tp8 EP-on.
+sweep:
+  tp: [4, 8]
+  ep: [true, false]

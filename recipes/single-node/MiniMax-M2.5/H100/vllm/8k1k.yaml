@@ -1,0 +1,73 @@
+# ** Upstream reference (SA H100 literal vllm serve command; no committed script):
+#   https://github.com/SemiAnalysisAI/InferenceX/tree/main/benchmarks/single_node/fixed_seq_len
+
+name: "minimax-m2.5-fp8-vllm-h100-8k1k-conc64-h100chart"
+setup_script: "vllm-container-deps.sh"
+
+model:
+  path: "hf:MiniMaxAI/MiniMax-M2.5"
+  container: "vllm/vllm-openai:v0.22.0"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "MiniMaxAI/MiniMax-M2.5"
+  container:
+    image: "vllm/vllm-openai:v0.22.0"
+  frameworks:
+    dynamo: "1.2.0.dev20260426"
+    vllm: "0.22.0"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+health_check:
+  max_attempts: 720
+  interval_seconds: 10
+
+resources:
+  gpu_type: "h100"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "MiniMaxAI/MiniMax-M2.5"
+      tensor-parallel-size: "{tp}"
+      gpu-memory-utilization: 0.90
+      max-model-len: 9472
+      kv-cache-dtype: fp8
+      max-cudagraph-capture-size: 2048
+      max-num-batched-tokens: 2048
+      stream-interval: 20
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 1
+
+sweep:
+  conc: [1, 2, 4, 8, 16, 32, 64, 128]
+  tp:   [8]

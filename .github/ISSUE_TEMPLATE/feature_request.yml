@@ -1,0 +1,58 @@
+name: Feature / Recipe Request
+description: Request a new recipe or an improvement to an existing one
+title: "[FEA]: "
+labels: ["feature request"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this request!
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Is this a new recipe, an improvement, or a change?
+      options:
+        - New recipe
+        - Improvement to existing recipe
+        - Tooling / repository change
+    validations:
+      required: true
+
+  - type: input
+    id: target
+    attributes:
+      label: Target model / GPU / framework
+      description: Which combination does this concern?
+      placeholder: "GLM-5 / GB300 / sglang"
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the motivation and any benchmark shapes or configs of interest.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the recipe or change you would like to see.
+
+  - type: textarea
+    id: misc
+    attributes:
+      label: Additional context
+      description: Any other context, references, or links.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      options:
+        - label: I agree to follow this project's [Code of Conduct](https://github.com/NVIDIA/srt-slurm-recipes/blob/main/.github/CODE_OF_CONDUCT.md).
+          required: true
+        - label: I have searched existing requests and found no duplicate.
+          required: true

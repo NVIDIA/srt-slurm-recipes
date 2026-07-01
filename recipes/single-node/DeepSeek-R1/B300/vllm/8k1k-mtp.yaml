@@ -1,0 +1,79 @@
+# ** Backfill: 8K/1K variant of recipes/single-node/DeepSeek-R1/B300/vllm/1k1k-mtp.yaml
+name: "deepseek-r1-nvfp4-vllm-b300-8k1k-mtp"
+
+model:
+  path: "hf:nvidia/DeepSeek-R1-0528-FP4-v2"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1-cuda13"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/DeepSeek-R1-0528-FP4-v2"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1-cuda13"
+  frameworks:
+    dynamo: "1.1.1"
+    vllm: "0.19.0+cu130"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/DeepSeek-R1-0528-FP4-v2"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      data-parallel-size: "{dp}"
+      enable-expert-parallel: "{ep}"
+      max-num-seqs: 1024
+      max-model-len: 9344
+      gpu-memory-utilization: 0.9
+      no-enable-prefix-caching: true
+      async-scheduling: true
+      quantization: modelopt_fp4
+      kv-cache-dtype: "fp8_e4m3"
+      compilation-config: '{"max_cudagraph_capture_size":1024}'
+      speculative-config: '{"method":"deepseek_mtp","num_speculative_tokens":3}'
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 1
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  dp: [1, 2, 4, 8]
+  ep: [true, false]

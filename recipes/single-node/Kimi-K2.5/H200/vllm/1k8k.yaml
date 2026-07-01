@@ -1,0 +1,72 @@
+# Upstream reference: https://github.com/SemiAnalysisAI/InferenceX/tree/main/benchmarks/single_node
+name: "kimi-k2.5-int4-vllm-h200-1k8k"
+
+model:
+  path: "hf:moonshotai/Kimi-K2.5"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.1"
+  precision: "int4"
+
+identity:
+  model:
+    repo: "moonshotai/Kimi-K2.5"
+    revision: "3367c8d1c68584429fab7faf845a32d5195b6ac1"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.2.1"
+  frameworks:
+    dynamo: "1.2.1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 720
+  interval_seconds: 10
+
+resources:
+  gpu_type: "h200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: "{tp}"
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "moonshotai/Kimi-K2.5"
+      tensor-parallel-size: "{tp}"
+      max-num-seqs: "{conc}"
+      max-model-len: 9472
+      gpu-memory-utilization: 0.95
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+      compilation-config: '{"pass_config":{"fuse_allreduce_rms":true}}'
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 8192
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+sweep:
+  conc: [2, 4, 8, 16, 32, 64, 128]
+  tp:   [8]

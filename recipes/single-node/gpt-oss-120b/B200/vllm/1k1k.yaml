@@ -1,0 +1,69 @@
+# Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/gptoss_fp4_b200.sh
+
+name: "gpt-oss-120b-fp4-vllm-b200-1k1k"
+
+model:
+  path: "hf:openai/gpt-oss-120b"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "openai/gpt-oss-120b"
+    revision: "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    vllm: "0.19.0"
+
+dynamo:
+  install: false
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    VLLM_USE_FLASHINFER_MOE_MXFP4_MXFP8: "1"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "openai/gpt-oss-120b"
+      tensor-parallel-size: "{tp}"
+      max-num-seqs: 512
+      max-model-len: 2068
+      max-num-batched-tokens: 8192
+      max-cudagraph-capture-size: 2048
+      gpu-memory-utilization: 0.9
+      no-enable-prefix-caching: true
+      kv-cache-dtype: "fp8"
+      compilation-config: '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true}}'
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+sweep:
+  tp: [1, 2, 4, 8]

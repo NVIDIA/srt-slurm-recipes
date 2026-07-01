@@ -1,0 +1,71 @@
+# Upstream reference:
+#   https://github.com/MiniMax-AI/MiniMax-M2.5/blob/main/docs/sglang_deploy_guide.md
+
+name: "minimax-m2.5-sglang-vanilla-b200-1k1k"
+
+model:
+  path: "hf:MiniMaxAI/MiniMax-M2.5"
+  container: "lmsysorg/sglang:v0.5.12-cu130"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "MiniMaxAI/MiniMax-M2.5"
+    revision: "f710177d938eff80b684d42c5aa84b382612f21f"
+  container:
+    image: "lmsysorg/sglang:v0.5.12-cu130"
+  frameworks:
+    sglang: "0.5.12"
+
+dynamo:
+  install: false
+
+frontend:
+  type: sglang
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "MiniMaxAI/MiniMax-M2.5"
+      trust-remote-code: true
+      tensor-parallel-size: "{tp}"
+      data-parallel-size: 1
+      expert-parallel-size: "{tp}"
+      tool-call-parser: "minimax-m2"
+      reasoning-parser: "minimax-append-think"
+      mem-fraction-static: 0.85
+      stream-interval: 50
+      scheduler-recv-interval: 30
+      tokenizer-worker-num: 6
+      enable-symm-mem: true
+      disable-radix-cache: true
+      context-length: 2068
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+sweep:
+  tp: [2, 4, 8]

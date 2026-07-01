@@ -1,0 +1,150 @@
+name: "glm-5-fp8-sglang-disagg-gb300-8k1k-hightpt0-c2800"
+
+# Upstream reference (InferenceX multi-node disagg launcher):
+#   InferenceX/benchmarks/multi_node/srt-slurm-recipes/sglang/glm5/gb300-fp8/8k1k/disagg/stp/8k1k_stp_hightpt_0.yaml
+
+model:
+  path: "hf:zai-org/GLM-5-FP8"
+  container: "lmsysorg/sglang:v0.5.11-cu130"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "zai-org/GLM-5-FP8"
+    revision: "4f96cc5eec29dcee5d6ded54f7ffe889438f9516"
+  container:
+    image: "lmsysorg/sglang:v0.5.11-cu130"
+
+dynamo:
+  version: "1.1.0"
+  install: true
+
+slurm:
+  time_limit: "03:00:00"
+  partition: "gb300"
+
+sbatch_directives:
+  cpus-per-task: "144"
+  mem: "0"
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "gb300"
+  gpus_per_node: 4
+
+  prefill_nodes: 14
+  prefill_workers: 14
+  gpus_per_prefill: 4
+
+  decode_nodes: 4
+  decode_workers: 1
+  gpus_per_decode: 16
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: true
+  num_additional_frontends: 9
+
+backend:
+  type: sglang
+
+  prefill_environment:
+    TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: "1800"
+    PYTHONUNBUFFERED: "1"
+    DYN_SKIP_SGLANG_LOG_FORMATTING: "1"
+    SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: "100000"
+    SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: "100000"
+    SGLANG_DISAGGREGATION_WAITING_TIMEOUT: "100000"
+    MC_TE_METRIC: "true"
+    MC_FORCE_MNNVL: "1"
+    NCCL_MNNVL_ENABLE: "1"
+    NCCL_CUMEM_ENABLE: "1"
+    SGLANG_MOONCAKE_CUSTOM_MEM_POOL: "True"
+    SGLANG_USE_MESSAGE_QUEUE_BROADCASTER: "0"
+    SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK: "1"
+    DYN_REQUEST_PLANE: "nats"
+  decode_environment:
+    TORCH_DISTRIBUTED_DEFAULT_TIMEOUT: "1800"
+    PYTHONUNBUFFERED: "1"
+    DYN_SKIP_SGLANG_LOG_FORMATTING: "1"
+    SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE: "100000"
+    SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT: "100000"
+    SGLANG_DISAGGREGATION_WAITING_TIMEOUT: "100000"
+    MC_TE_METRIC: "true"
+    MC_FORCE_MNNVL: "1"
+    NCCL_MNNVL_ENABLE: "1"
+    NCCL_CUMEM_ENABLE: "1"
+    SGLANG_MOONCAKE_CUSTOM_MEM_POOL: "True"
+    SGLANG_USE_MESSAGE_QUEUE_BROADCASTER: "0"
+    SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK: "1"
+    DYN_REQUEST_PLANE: "nats"
+    SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK: "512"
+  sglang_config:
+    prefill:
+      served-model-name: "GLM-5-FP8"
+      trust-remote-code: true
+      quantization: "fp8"
+      kv-cache-dtype: "fp8_e4m3"
+      disaggregation-mode: "prefill"
+      disaggregation-transfer-backend: "nixl"
+      max-running-requests: 256
+      cuda-graph-max-bs: 256
+      mem-fraction-static: 0.7
+      context-length: 9600
+      chunked-prefill-size: 32768
+      max-prefill-tokens: 8192
+      tensor-parallel-size: 4
+      data-parallel-size: 4
+      expert-parallel-size: 1
+      enable-dp-attention: true
+      enable-dp-lm-head: true
+      load-balance-method: "total_tokens"
+      nsa-decode-backend: "trtllm"
+      nsa-prefill-backend: "trtllm"
+      moe-runner-backend: "flashinfer_trtllm"
+      enable-flashinfer-allreduce-fusion: true
+      disable-radix-cache: true
+      weight-loader-prefetch-checkpoints: true
+      model-loader-extra-config: '{"enable_multithread_load": true}'
+    decode:
+      served-model-name: "GLM-5-FP8"
+      trust-remote-code: true
+      quantization: "fp8"
+      kv-cache-dtype: "fp8_e4m3"
+      disaggregation-mode: "decode"
+      disaggregation-transfer-backend: "nixl"
+      mem-fraction-static: 0.8
+      context-length: 9600
+      nsa-decode-backend: "trtllm"
+      nsa-prefill-backend: "trtllm"
+      skip-tokenizer-init: true
+      stream-interval: 30
+      disable-radix-cache: true
+      weight-loader-prefetch-checkpoints: true
+      model-loader-extra-config: '{"enable_multithread_load": true}'
+      tensor-parallel-size: 16
+      expert-parallel-size: 16
+      data-parallel-size: 16
+      enable-dp-lm-head: true
+      enable-dp-attention: true
+      moe-dense-tp-size: 1
+      ep-num-redundant-experts: 32
+      ep-dispatch-algorithm: "static"
+      moe-a2a-backend: "deepep"
+      deepep-mode: "low_latency"
+      deepep-config: "/configs/deepep_config.json"
+      max-running-requests: 2800
+      cuda-graph-max-bs: 175
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+
+sweep:
+  conc: [2800]

@@ -1,0 +1,85 @@
+# references:
+# - srt-slurm-recipes/recipes/single-node/Kimi-K2.5/B200/vllm/8k1k.yaml
+# - InferenceX/benchmarks/single_node/kimik2.5_fp4_b200.sh
+name: "kimi-k2.5-nvfp4-vllm-b200-1k8k"
+
+model:
+  path: "hf:nvidia/Kimi-K2.5-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Kimi-K2.5-NVFP4"
+    revision: "0fd0a5e6879298d3476e3b61852a79792a35ae3d"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    vllm: "0.19.0"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    NCCL_CUMEM_ENABLE: "1"
+    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: "0"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/Kimi-K2.5-NVFP4"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      max-num-seqs: 1024
+      max-model-len: 9472
+      max-num-batched-tokens: 16384
+      max-cudagraph-capture-size: 2048
+      gpu-memory-utilization: 0.9
+      reasoning-parser: "kimi_k2"
+      kv-cache-dtype: "fp8"
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+      compilation-config: '{"pass_config":{"fuse_allreduce_rms":true}}'
+      stream-interval: 20
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 8192
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]

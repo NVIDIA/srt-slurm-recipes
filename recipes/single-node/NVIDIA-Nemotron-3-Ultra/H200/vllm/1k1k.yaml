@@ -1,0 +1,82 @@
+# Upstream reference: https://vllm.ai/blog/2026-06-04-nemotron-3-ultra-vllm
+
+name: "nemotron-ultra-550b-nvfp4-vllm-h200-1k1k"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-nemotron-ultra-dev.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.3.0-nemotron-ultra-dev.1"
+  frameworks:
+    dynamo: "1.3.0-nemotron-ultra-dev.1"
+
+dynamo:
+  install: false
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "h200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    VLLM_DISABLED_KERNELS: "FlashInferFP8ScaledMMLinearKernel"
+    VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+    VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE: "1"
+    VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+    VLLM_ALLREDUCE_USE_SYMM_MEM: "0"
+    NCCL_CUMEM_ENABLE: "1"
+    NCCL_NVLS_ENABLE: "1"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+      tensor-parallel-size: "{tp}"
+      enable-expert-parallel: true
+      trust-remote-code: true
+      max-num-seqs: "{conc}"
+      max-model-len: 2304
+      max-num-batched-tokens: 32768
+      gpu-memory-utilization: 0.85
+      block-size: 64
+      no-enable-flashinfer-autotune: true
+      mamba-cache-mode: align
+      enable-prefix-caching: true
+      no-disable-hybrid-kv-cache-manager: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: true
+
+sweep:
+  conc: [2, 4, 8, 16, 32, 64, 128, 256, 512]
+  tp: [8]

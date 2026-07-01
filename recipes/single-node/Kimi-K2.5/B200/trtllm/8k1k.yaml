@@ -1,0 +1,97 @@
+# references:
+# - srt-slurm-recipes/recipes/single-node/Kimi-K2.5/B200/trtllm/1k1k.yaml
+# - srt-slurm-recipes/recipes/single-node/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4/B200/trtllm/8k1k-agg-tp1.yaml
+name: "kimi-k2.5-nvfp4-trtllm-b200-8k1k"
+
+model:
+  path: "hf:nvidia/Kimi-K2.5-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Kimi-K2.5-NVFP4"
+    revision: "0fd0a5e6879298d3476e3b61852a79792a35ae3d"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    tensorrt_llm: "1.3.0rc13"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: trtllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TRTLLM_ENABLE_PDL: "1"
+    TRTLLM_SERVER_DISABLE_GC: "1"
+    TRTLLM_WORKER_DISABLE_GC: "1"
+    TLLM_LOG_LEVEL: "INFO"
+
+  trtllm_config:
+    aggregated:
+      backend: "pytorch"
+      tensor_parallel_size: "{tp}"
+      pipeline_parallel_size: "{pp}"
+      moe_expert_parallel_size: "{ep}"
+      max_batch_size: 1024
+      max_num_tokens: 16384
+      max_seq_len: 9472
+      trust_remote_code: true
+      print_iter_log: true
+      stream_interval: 20
+      num_postprocess_workers: 4
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 256
+      kv_cache_config:
+        dtype: fp8
+        enable_block_reuse: false
+        free_gpu_memory_fraction: 0.8
+      moe_config:
+        backend: "TRTLLM"
+      nvfp4_gemm_config:
+        allowed_backends:
+          - cutlass
+          - cublaslt
+          - cutedsl
+          - cuda_core
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]
