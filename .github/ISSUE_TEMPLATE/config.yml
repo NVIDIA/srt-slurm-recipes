@@ -1,0 +1,6 @@
+# https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+blank_issues_enabled: true
+contact_links:
+  - name: srt-slurm (upstream tool)
+    url: https://github.com/NVIDIA/srt-slurm/issues
+    about: For issues with benchmark execution, the srtctl CLI, or launch behavior, file them upstream here.

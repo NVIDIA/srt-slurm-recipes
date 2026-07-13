@@ -1,0 +1,88 @@
+# references:
+# - srt-slurm-recipes/recipes/single-node/Kimi-K2.5/B200/sglang/1k1k.yaml
+# - srt-slurm-recipes/recipes/single-node/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4/B200/sglang/8k1k-agg-tp1.yaml
+name: "kimi-k2.5-nvfp4-sglang-b200-8k1k"
+
+model:
+  path: "hf:nvidia/Kimi-K2.5-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.1.1-cuda13"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Kimi-K2.5-NVFP4"
+    revision: "0fd0a5e6879298d3476e3b61852a79792a35ae3d"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.1.1-cuda13"
+  frameworks:
+    dynamo: "1.1.1"
+    sglang: "0.5.10.post1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    SGLANG_JIT_DEEPGEMM_PRECOMPILE: "0"
+    SGLANG_OPT_USE_JIT_NORM: "1"
+    SGLANG_OPT_USE_JIT_INDEXER_METADATA: "1"
+    SGLANG_OPT_USE_TOPK_V2: "1"
+    SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2: "1"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "nvidia/Kimi-K2.5-NVFP4"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      data-parallel-size: "{dp}"
+      expert-parallel-size: "{ep}"
+      trust-remote-code: true
+      context-length: 9472
+      max-running-requests: 1024
+      cuda-graph-max-bs: 1024
+      mem-fraction-static: 0.85
+      kv-cache-dtype: "fp8_e4m3"
+      disable-flashinfer-autotune: true
+      disable-piecewise-cuda-graph: true
+      disable-radix-cache: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  dp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]

@@ -1,0 +1,73 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/minimaxm3_fp8_b300_mtp.sh
+name: "minimax-m3-b300-fp8-agg-tp4-ep-mtp-8k1k"
+
+model:
+  path: "hf:MiniMaxAI/MiniMax-M3-MXFP8"
+  container: "vllm/vllm-openai:minimax-m3"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "MiniMaxAI/MiniMax-M3-MXFP8"
+    revision: "1c4e6a69f3278df8dd6c9693fcca241efe439b7d"
+  container:
+    image: "vllm/vllm-openai:minimax-m3"
+  frameworks:
+    dynamo: "1.2.0.dev20260526"
+    vllm: "nightly"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260526"
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+    VLLM_FLOAT32_MATMUL_PRECISION: "high"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "MiniMaxAI/MiniMax-M3-MXFP8"
+      tensor-parallel-size: 4
+      enable-expert-parallel: true
+      gpu-memory-utilization: 0.90
+      max-model-len: 9300
+      block-size: 128
+      language-model-only: true
+      max-cudagraph-capture-size: 2048
+      max-num-batched-tokens: 16384
+      speculative-config: '{"method": "eagle3", "model": "Inferact/MiniMax-M3-EAGLE3", "num_speculative_tokens": 3, "attention_backend": "FLASH_ATTN"}'
+      stream-interval: 20
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "128x256"
+  req_rate: "inf"
+  use_chat_template: true

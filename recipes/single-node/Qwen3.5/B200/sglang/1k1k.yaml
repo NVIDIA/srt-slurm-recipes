@@ -1,0 +1,81 @@
+# Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/qwen3.5_fp4_b200.sh
+
+name: "qwen3.5-397b-a17b-fp8-sglang-vanilla-b200-1k1k"
+
+model:
+  path: "hf:Qwen/Qwen3.5-397B-A17B-FP8"
+  container: "lmsysorg/sglang:v0.5.12-cu130"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "Qwen/Qwen3.5-397B-A17B-FP8"
+    revision: "ea5b4f81096f3901c91dea97f81324302495781d"
+  container:
+    image: "lmsysorg/sglang:v0.5.12-cu130"
+  frameworks:
+    sglang: "0.5.12"
+
+dynamo:
+  install: false
+
+frontend:
+  type: sglang
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "Qwen/Qwen3.5-397B-A17B-FP8"
+      trust-remote-code: true
+
+      tensor-parallel-size: "{tp}"
+      data-parallel-size: 1
+      expert-parallel-size: "{tp}"
+
+      quantization: "fp8"
+      kv-cache-dtype: "fp8_e4m3"
+      mamba-ssm-dtype: "bfloat16"
+      attention-backend: "trtllm_mha"
+      moe-runner-backend: "flashinfer_trtllm"
+
+      # cuda-graph-bs is trimmed to the 7 sizes we actually sweep
+      # (vs SGLang's default ~52). Keeps capture under ~30s on a
+      # 397 GB FP8 cold-load, avoiding sgl-model-gateway's ~27-min
+      # AddWorker retry budget at high concurrency.
+      cuda-graph-bs: [1, 32, 64, 128, 256, 512, 1024]
+
+      mem-fraction-static: 0.8
+      stream-interval: 50
+      scheduler-recv-interval: 30
+      tokenizer-worker-num: 6
+
+      enable-symm-mem: true
+      disable-radix-cache: true
+
+      context-length: 2068
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+sweep:
+  tp: [4, 8]

@@ -1,0 +1,104 @@
+# reference references used:
+  # - https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/dsv4_fp4_b200_trt_mtp.sh
+  # - https://github.com/SemiAnalysisAI/InferenceX/blob/main/.github/configs/nvidia-master.yaml
+# Adapted to B300 (TP4 aggregated) from the B200 trtllm 1k1k-mtp recipe.
+name: "deepseek-v4-pro-fp4-trtllm-b300-agg-tp4-1k1k-mtp"
+
+model:
+  path: "hf:nvidia/DeepSeek-V4-Pro-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/DeepSeek-V4-Pro-NVFP4"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: trtllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    PYTHONPATH: "/srtctl-benchmarks/sa-bench"
+    TRTLLM_ENABLE_PDL: "1"
+    TRTLLM_SERVER_DISABLE_GC: "1"
+    TRTLLM_WORKER_DISABLE_GC: "1"
+    TLLM_LOG_LEVEL: "INFO"
+    TRTLLM_DSV4_USE_MPIRUN: "1"
+    TRTLLM_DSV4_SANITIZE_SLURM_MPI_ENV: "1"
+    TRTLLM_DSV4_MTP_NUM_NEXTN_LAYERS: "2"
+    NCCL_NVLS_ENABLE: "0"
+
+  trtllm_config:
+    aggregated:
+      backend: "pytorch"
+      tensor_parallel_size: "{tp}"
+      pipeline_parallel_size: "{pp}"
+      moe_expert_parallel_size: "{ep}"
+      enable_attention_dp: true
+      attention_dp_config:
+        batching_wait_iters: 0
+        enable_balance: true
+        timeout_iters: 60
+      print_iter_log: true
+      max_batch_size: 1024
+      max_num_tokens: 8192
+      max_seq_len: 8192
+      custom_tokenizer: "sa_bench_tokenizers.sglang_deepseek_v4.SGLangDeepseekV4Tokenizer"
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 1024
+      kv_cache_config:
+        tokens_per_block: 128
+        dtype: fp8
+        free_gpu_memory_fraction: 0.50
+        enable_block_reuse: false
+      stream_interval: 10
+      num_postprocess_workers: 4
+      moe_config:
+        backend: "TRTLLM"
+      speculative_config:
+        decoding_type: "MTP"
+        num_nextn_predict_layers: 2
+      trust_remote_code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 1
+  use_chat_template: true
+  custom_tokenizer: "sa_bench_tokenizers.sglang_deepseek_v4.SGLangDeepseekV4Tokenizer"
+
+sweep:
+  tp: [4]
+  pp: [1]
+  dp: [4]
+  ep: [4]

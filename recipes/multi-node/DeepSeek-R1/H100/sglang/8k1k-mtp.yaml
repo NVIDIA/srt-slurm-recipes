@@ -1,0 +1,86 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/dsr1_fp8_h200_mtp.sh
+
+name: "deepseek-r1-fp8-sglang-mtp-h100-8k1k-conc4-h200chart"
+setup_script: "sglang-container-deps.sh"
+
+model:
+  path: "hf:deepseek-ai/DeepSeek-R1-0528"
+  container: "lmsysorg/sglang:v0.5.12-cu130"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "deepseek-ai/DeepSeek-R1-0528"
+    revision: "4236a6af538feda4548eca9ab308586007567f52"
+  container:
+    image: "lmsysorg/sglang:v0.5.12-cu130"
+  frameworks:
+    dynamo: "1.2.0.dev20260426"
+    sglang: "0.5.12"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+health_check:
+  max_attempts: 720
+  interval_seconds: 10
+
+resources:
+  gpu_type: "h100"
+  gpus_per_node: 8
+  agg_nodes: 2
+  agg_workers: 1
+  gpus_per_agg: "{tp}"
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    SGLANG_ENABLE_SPEC_V2: "1"
+    TORCH_CUDA_ARCH_LIST: "9.0"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "deepseek-ai/DeepSeek-R1-0528"
+      tensor-parallel-size: "{tp}"
+      data-parallel-size: 1
+      expert-parallel-size: "{ep}"
+      trust-remote-code: true
+      disable-radix-cache: true
+      max-running-requests: "{conc}"
+      cuda-graph-max-bs: "{conc}"
+      chunked-prefill-size: 32768
+      max-prefill-tokens: 32768
+      mem-fraction-static: 0.82
+      attention-backend: flashinfer
+      stream-interval: 10
+      decode-log-interval: 1
+      speculative-algorithm: EAGLE
+      speculative-num-steps: 2
+      speculative-num-draft-tokens: 3
+      speculative-eagle-topk: 1
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: ["{conc}"]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+  use_chat_template: true
+
+sweep:
+  conc: [4]
+  tp:   [16]
+  ep:   [1]

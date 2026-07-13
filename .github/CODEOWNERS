@@ -1,0 +1,19 @@
+# Code owners for srt-slurm-recipes.
+# Each line is a file pattern followed by one or more owners.
+# Owners are automatically requested for review on matching pull requests.
+#
+# TODO: replace these individual handles with a GitHub team handle once one
+# exists, e.g. @NVIDIA/srt-slurm-recipes-maintainers.
+
+# Default owners for everything in the repo.
+*                 @shljessie @faradawn @AlphaBladez @choge @zhenghax
+
+# Recipe configurations.
+recipes/          @shljessie @faradawn @AlphaBladez @choge @zhenghax
+
+# Tooling and table generation.
+scripts/          @shljessie @faradawn @AlphaBladez @choge @zhenghax
+.githooks/        @shljessie @faradawn @AlphaBladez @choge @zhenghax
+
+# Repo governance and CI/templates.
+.github/          @shljessie @faradawn @AlphaBladez @choge @zhenghax

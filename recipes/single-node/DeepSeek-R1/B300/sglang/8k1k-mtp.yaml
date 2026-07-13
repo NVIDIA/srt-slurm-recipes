@@ -1,0 +1,92 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/dsr1_fp4_b300.sh
+
+name: "deepseek-r1-sglang-b300-8k1k-mtp"
+
+model:
+  path: "hf:nvidia/DeepSeek-R1-0528-FP4-v2"
+  container: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.1.1-cuda13"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/DeepSeek-R1-0528-FP4-v2"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.1.1-cuda13"
+  frameworks:
+    dynamo: "1.1.1"
+    sglang: "0.5.10.post1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    SGLANG_ENABLE_SPEC_V2: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "deepseek-ai/DeepSeek-R1-0528"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      data-parallel-size: "{dp}"
+      ep-size: "{ep}"
+      enable-dp-attention: false
+      trust-remote-code: true
+      quantization: "modelopt_fp4"
+      context-length: 9344
+      max-running-requests: 1024
+      cuda-graph-max-bs: 1024
+      mem-fraction-static: 0.82
+      kv-cache-dtype: "fp8_e4m3"
+      chunked-prefill-size: 16384
+      max-prefill-tokens: 16384
+      attention-backend: "trtllm_mla"
+      moe-runner-backend: "flashinfer_trtllm"
+      enable-flashinfer-allreduce-fusion: true
+      scheduler-recv-interval: 30
+      enable-symm-mem: true
+      disable-radix-cache: true
+      stream-interval: 30
+      speculative-algorithm: "EAGLE"
+      speculative-num-steps: 2
+      speculative-num-draft-tokens: 3
+      speculative-eagle-topk: 1
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_warmup_mult: 1
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  dp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]

@@ -1,0 +1,70 @@
+# Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/minimaxm2.5_fp8_b200.sh
+
+name: "minimax-m2.5-fp8-vllm-b200-1k1k"
+
+model:
+  path: "hf:MiniMaxAI/MiniMax-M2.5"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "MiniMaxAI/MiniMax-M2.5"
+    revision: "f710177d938eff80b684d42c5aa84b382612f21f"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    vllm: "0.19.0"
+
+dynamo:
+  install: false
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    VLLM_FLOAT32_MATMUL_PRECISION: "high"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "MiniMaxAI/MiniMax-M2.5"
+      tensor-parallel-size: "{tp}"
+      enable-expert-parallel: true
+      gpu-memory-utilization: 0.90
+      max-model-len: 2068
+      block-size: 32
+      kv-cache-dtype: "fp8"
+      max-cudagraph-capture-size: 2048
+      max-num-batched-tokens: 2048
+      stream-interval: 20
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+sweep:
+  tp: [2, 4, 8]

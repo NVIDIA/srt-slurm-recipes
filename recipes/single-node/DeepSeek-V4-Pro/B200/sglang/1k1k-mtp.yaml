@@ -1,0 +1,100 @@
+# reference references used:
+  # - https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/dsv4_fp4_b200.sh
+  # - https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/dsv4_fp4_b300_sglang_mtp.sh
+name: "deepseek-v4-pro-fp4-sglang-b200-1k1k-mtp"
+
+model:
+  path: "hf:deepseek-ai/DeepSeek-V4-Pro"
+  container: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.2.0-sglang-deepseek-v4-b200-dev.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "deepseek-ai/DeepSeek-V4-Pro"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.2.0-sglang-deepseek-v4-b200-dev.1"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 8
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    SGLANG_ENABLE_SPEC_V2: "1"
+    SGLANG_JIT_DEEPGEMM_PRECOMPILE: "0"
+    SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT: "1"
+    SGLANG_OPT_USE_JIT_NORM: "1"
+    SGLANG_OPT_USE_JIT_INDEXER_METADATA: "1"
+    SGLANG_OPT_USE_TOPK_V2: "1"
+    SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2: "1"
+    SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN: "1"
+    SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE: "1"
+    SGLANG_OPT_FIX_HASH_MEGA_MOE: "1"
+    SGLANG_OPT_USE_FAST_MASK_EP: "1"
+    SGLANG_OPT_FIX_MEGA_MOE_MEMORY: "1"
+    SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK: "4096"
+    SGLANG_OPT_FIX_NEXTN_MEGA_MOE: "1"
+    SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK: "0"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "deepseek-ai/DeepSeek-V4-Pro"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      dp-size: "{dp}"
+      ep-size: "{ep}"
+      enable-dp-attention: true
+      trust-remote-code: true
+      context-length: 2176
+      chunked-prefill-size: 32768
+      max-running-requests: 256
+      cuda-graph-max-bs: 1024
+      mem-fraction-static: 0.92
+      moe-a2a-backend: "deepep"
+      deepep-config: '{"normal_dispatch":{"num_sms":96},"normal_combine":{"num_sms":96}}'
+      swa-full-tokens-ratio: 0.1
+      disable-radix-cache: true
+      speculative-algorithm: "EAGLE"
+      speculative-num-steps: 1
+      speculative-eagle-topk: 1
+      speculative-num-draft-tokens: 2
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 1
+  use_chat_template: true
+  custom_tokenizer: "sa_bench_tokenizers.sglang_deepseek_v4.SGLangDeepseekV4Tokenizer"
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  dp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]

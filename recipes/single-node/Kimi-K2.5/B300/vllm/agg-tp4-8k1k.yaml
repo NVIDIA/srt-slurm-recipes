@@ -1,0 +1,69 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/kimik2.5_fp4_b300.sh
+name: "kimi-k2.5-b300-fp4-agg-tp4-8k1k"
+
+model:
+  path: "hf:nvidia/Kimi-K2.5-NVFP4"
+  container: "vllm/vllm-openai:v0.22.0"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Kimi-K2.5-NVFP4"
+    revision: "0fd0a5e6879298d3476e3b61852a79792a35ae3d"
+  container:
+    image: "vllm/vllm-openai:v0.22.0"
+  frameworks:
+    dynamo: "1.2.0.dev20260426"
+    vllm: "0.22.0"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    VLLM_ENGINE_READY_TIMEOUT_S: "3600"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/Kimi-K2.5-NVFP4"
+      tensor-parallel-size: 4
+      gpu-memory-utilization: 0.90
+      max-model-len: 9300
+      max-num-seqs: 128
+      compilation-config: '{"pass_config": {"fuse_allreduce_rms": true}}'
+      reasoning-parser: kimi_k2
+      no-enable-prefix-caching: true
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "1x2x4x8x16x32x64x128"
+  req_rate: "inf"

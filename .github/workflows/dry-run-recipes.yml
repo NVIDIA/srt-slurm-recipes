@@ -1,0 +1,68 @@
+name: Recipe Dry Run
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dry-run-recipes.yml"
+      - "recipes/**/*.yaml"
+      - "scripts/ci/dry_run_recipes.sh"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dry-run-recipes.yml"
+      - "recipes/**/*.yaml"
+      - "scripts/ci/dry_run_recipes.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run-recipes:
+    name: Dry-run recipes
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out recipes
+        uses: actions/checkout@v4
+
+      - name: Check out srt-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: NVIDIA/srt-slurm
+          ref: main
+          path: srt-slurm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install srtctl
+        working-directory: srt-slurm
+        run: |
+          uv venv
+          uv pip install -e .
+
+      - name: Dry-run every recipe
+        env:
+          RECIPES_ROOT: ${{ github.workspace }}/recipes
+          SRTCTL_WORKDIR: ${{ github.workspace }}/srt-slurm
+          SRTSLURM_CONFIG: ${{ runner.temp }}/srtslurm.yaml
+          DRY_RUN_LOG_DIR: ${{ runner.temp }}/srt-dry-run-logs
+          SRTCTL_OUTPUT_DIR: ${{ runner.temp }}/srtctl-output
+        run: |
+          bash scripts/ci/dry_run_recipes.sh
+
+      - name: Upload dry-run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: srt-dry-run-logs
+          path: ${{ runner.temp }}/srt-dry-run-logs
+          if-no-files-found: ignore

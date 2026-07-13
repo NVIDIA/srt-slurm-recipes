@@ -1,0 +1,87 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/dsr1_fp4_b200_trt.sh
+
+name: "deepseek-r1-nvfp4-trtllm-b300-8k1k-mtp"
+
+model:
+  path: "hf:nvidia/DeepSeek-R1-0528-FP4-v2"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/DeepSeek-R1-0528-FP4-v2"
+    revision: "25a138f28f49022958b9f2d205f9b7de0cdb6e18"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    tensorrt_llm: "1.3.0rc13"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "02:00:00"
+
+resources:
+  gpu_type: "b300"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: trtllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TRTLLM_ENABLE_PDL: "1"
+    TRTLLM_SERVER_DISABLE_GC: "1"
+    TRTLLM_WORKER_DISABLE_GC: "1"
+    TLLM_LOG_LEVEL: "INFO"
+
+  trtllm_config:
+    aggregated:
+      backend: "pytorch"
+      tensor_parallel_size: "{tp}"
+      pipeline_parallel_size: "{pp}"
+      moe_expert_parallel_size: "{ep}"
+      enable_attention_dp: false
+      print_iter_log: true
+      max_batch_size: 1024
+      max_num_tokens: 12416
+      max_seq_len: 9344
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 1024
+      kv_cache_config:
+        dtype: fp8
+        free_gpu_memory_fraction: 0.8
+        enable_block_reuse: false
+      stream_interval: 10
+      moe_config:
+        backend: "TRTLLM"
+      speculative_config:
+        decoding_type: "MTP"
+        num_nextn_predict_layers: 3
+      trust_remote_code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_warmup_mult: 1
+  use_chat_template: false
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]

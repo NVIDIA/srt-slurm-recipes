@@ -1,0 +1,90 @@
+# Upstream reference (vLLM Qwen3.5 throughput-focused serving):
+#   https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html
+
+# Perf note: throughput is below what a 17B-active MoE on 8x B200 would
+# suggest. Qwen3.5's Mamba/GDN layers don't yet have fused, prefix-cache-
+# friendly kernels in vLLM, so every step pays an extra state-cache copy
+# and falls off the CUDA-graph fast path. That per-token overhead is paid
+# regardless of model size, which is why this 397B MoE shows the same
+# throughput gap reported upstream on the smaller 30B Qwen3 hybrid model.
+# Tracker (remove this config workaround / revisit perf once fixed):
+#   vllm-project/vllm#36627
+
+name: "qwen3.5-397b-a17b-fp8-vllm-b200-1k1k"
+
+model:
+  path: "hf:Qwen/Qwen3.5-397B-A17B-FP8"
+  container: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  precision: "fp8"
+
+identity:
+  model:
+    repo: "Qwen/Qwen3.5-397B-A17B-FP8"
+    revision: "ea5b4f81096f3901c91dea97f81324302495781d"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.1.1"
+  frameworks:
+    dynamo: "1.1.1"
+    vllm: "0.19.0"
+
+dynamo:
+  install: false
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+backend:
+  type: vllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    TORCH_CUDA_ARCH_LIST: "10.0"
+    VLLM_FLOAT32_MATMUL_PRECISION: "high"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "Qwen/Qwen3.5-397B-A17B-FP8"
+      tensor-parallel-size: 1
+      data-parallel-size: 8
+      enable-expert-parallel: true
+      language-model-only: true
+      reasoning-parser: "qwen3"
+      enable-prefix-caching: true
+
+      # Qwen3.5 mixes regular attention with GDN/Mamba layers; this
+      # Dynamo build of vLLM auto-disables the Hybrid KV Cache Manager,
+      # after which `unify_hybrid_kv_cache_specs` crashes on the mixed
+      # FullAttentionSpec + MambaSpec. Force HMA back on. Trackers:
+      # vllm-project/vllm#41860, ai-dynamo/dynamo#8988.
+      no-disable-hybrid-kv-cache-manager: true
+
+      gpu-memory-utilization: 0.90
+      max-model-len: 2068
+      block-size: 32
+      kv-cache-dtype: "fp8"
+      max-num-batched-tokens: 8192
+      stream-interval: 20
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  num_warmup_mult: 2
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10

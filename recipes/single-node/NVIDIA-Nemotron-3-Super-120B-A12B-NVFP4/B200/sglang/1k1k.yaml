@@ -1,0 +1,55 @@
+name: "nemotron-super-120b-nvfp4-sglang-b200-1k1k"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.2.0-sglang-deepseek-v4-b200-dev.1"
+  precision: "fp4"
+
+dynamo:
+  install: false
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      data-parallel-size: "{dp}"
+      expert-parallel-size: "{ep}"
+      trust-remote-code: true
+      mem-fraction-static: 0.85
+      context-length: 2176
+      max-running-requests: 1024
+      cuda-graph-max-bs: 1024
+      disable-piecewise-cuda-graph: true
+
+benchmark:
+  type: "sa-bench"
+  isl: 1024
+  osl: 1024
+  concurrencies: [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  req_rate: "inf"
+  random_range_ratio: 0.8
+  num_warmup_mult: 1
+
+sweep:
+  tp: [1, 2, 4, 8]
+  pp: [1, 2, 4, 8]
+  dp: [1, 2, 4, 8]
+  ep: [1, 2, 4, 8]

@@ -1,0 +1,61 @@
+name: Bug Report
+description: Report a problem with a recipe in this repository
+title: "[BUG]: "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report!
+
+        Note: this repository contains sweep configuration only. For problems with
+        benchmark execution or the `srtctl` CLI, please file upstream in
+        [NVIDIA/srt-slurm](https://github.com/NVIDIA/srt-slurm/issues).
+
+  - type: input
+    id: recipe
+    attributes:
+      label: Affected recipe
+      description: Path to the recipe YAML this bug relates to.
+      placeholder: "recipes/multi-node/GLM-5/GB300/sglang/1k1k-...yaml"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: What happened, and what did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact `srtctl` command (dry-run/apply) and any flags.
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste relevant error and log output here.
+      render: shell
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: GPU platform, container image/version, srt-slurm version, framework.
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      options:
+        - label: I agree to follow this project's [Code of Conduct](https://github.com/NVIDIA/srt-slurm-recipes/blob/main/.github/CODE_OF_CONDUCT.md).
+          required: true
+        - label: I have searched existing issues and found no duplicate.
+          required: true
