@@ -1,8 +1,8 @@
-name: "4xDEP2_1xDEP8_acc"
+name: "qwen35-397b-nvfp4-gb200-disagg-5xdep2-1xdep8-acc"
 
 model:
-  path: "qwen35-397b-a17b-nvfp4"
-  container: "vllm-openai-nightly-d223c900d85224c02f2162ee2c757a769e99f519"
+  path: "hf:nvidia/Qwen3.5-397B-A17B-NVFP4"
+  container: "vllm/vllm-openai:nightly-d223c900d85224c02f2162ee2c757a769e99f519"
   precision: "NVFP4"
 
 dynamo:
@@ -13,8 +13,8 @@ resources:
   gpu_type: "gb200"
   gpus_per_node: 4
 
-  prefill_nodes: 2
-  prefill_workers: 4
+  prefill_nodes: 3
+  prefill_workers: 5
   gpus_per_prefill: 2
 
   decode_nodes: 2

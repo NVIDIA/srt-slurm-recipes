@@ -1,8 +1,8 @@
-name: "5xDEP2_1xDEP8_acc"
+name: "qwen35-397b-nvfp4-gb200-disagg-5xdep2-1xdep8-cc4096"
 
 model:
-  path: "qwen35-397b-a17b-nvfp4"
-  container: "vllm-openai-nightly-d223c900d85224c02f2162ee2c757a769e99f519"
+  path: "hf:nvidia/Qwen3.5-397B-A17B-NVFP4"
+  container: "vllm/vllm-openai:nightly-d223c900d85224c02f2162ee2c757a769e99f519"
   precision: "NVFP4"
 
 dynamo:
@@ -71,8 +71,15 @@ backend:
       stream-interval: 100
       mamba-ssm-cache-dtype: "bfloat16"
       language-model-only: true
+      max-cudagraph-capture-size: 640
 
 benchmark:
-  type: "gsm8k"
-  repeat: 5
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  concurrencies: "4096"
+  req_rate: "inf"
+  random_range_ratio: 1.0
+  num_prompts_mult: 8
+  num_warmup_mult: 1
 

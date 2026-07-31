@@ -1,8 +1,8 @@
-name: "7xDEP2_1xDEP8_cc4096"
+name: "qwen35-397b-nvfp4-gb200-disagg-7xdep2-1xdep8-cc4096"
 
 model:
-  path: "qwen35-397b-a17b-nvfp4"
-  container: "vllm-openai-nightly-d223c900d85224c02f2162ee2c757a769e99f519"
+  path: "hf:nvidia/Qwen3.5-397B-A17B-NVFP4"
+  container: "vllm/vllm-openai:nightly-d223c900d85224c02f2162ee2c757a769e99f519"
   precision: "NVFP4"
 
 dynamo:

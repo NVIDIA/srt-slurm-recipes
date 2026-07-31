@@ -93,6 +93,12 @@ Legend:
       <td><span title="Not supported on this platform">&#10134;</span></td>
       <td><span title="Not supported on this platform">&#10134;</span></td>
     </tr>
+    <tr>
+      <td><code>Qwen3.5</code></td>
+      <td><a href="recipes/multi-node/Qwen3.5/GB200/">&#9989;</a></td>
+      <td>&#9888;&#65039;</td>
+      <td>&#9888;&#65039;</td>
+    </tr>
   </tbody>
 </table>
 
