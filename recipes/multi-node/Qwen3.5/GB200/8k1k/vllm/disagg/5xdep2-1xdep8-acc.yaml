@@ -56,6 +56,7 @@ backend:
       stream-interval: 100
       mamba-ssm-cache-dtype: "bfloat16"
       language-model-only: true
+      max-num-batched-tokens: 16384
 
     decode:
       kv-transfer-config: '{"kv_connector": "NixlConnector", "kv_role": "kv_both", "kv_load_failure_policy": "fail"}'
