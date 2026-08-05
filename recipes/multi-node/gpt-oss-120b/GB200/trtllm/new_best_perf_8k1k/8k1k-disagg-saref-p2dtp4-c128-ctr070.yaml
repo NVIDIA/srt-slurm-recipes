@@ -1,14 +1,14 @@
-name: "gpt-oss-120b-trtllm-disagg-gb200-8k1k-dep2-c128-c256-ctr130"
+name: "gpt-oss-120b-trtllm-disagg-gb200-8k1k-saref-p2dtp4-c128-ctr070"
 
 # Upstream reference (InferenceX multi-node disagg launcher):
 #   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/gptoss_fp4_gb200_dynamo-trt.sh
 #
-# DEP2 disagg (P:2xTP1, D:1xDEP2, attention_dp=true) on tensorrtllm-runtime:1.3.0.
-# TRT-LLM 1.3.0rc11+ removed MNNVL all-to-all; use NVLinkOneSided on decode.
+# Best-perf point at c=128: P:2xTP1, D:1xTP4 (EP1, attention_dp=false).
+# Second prefill worker avoids prefill starvation vs single-prefill TP4.
 
 model:
   path: "hf:openai/gpt-oss-120b"
-  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.7.0.post2"
   precision: "fp4"
 
 identity:
@@ -16,10 +16,9 @@ identity:
     repo: "openai/gpt-oss-120b"
     revision: "b5c939de8f754692c1647ca79fbf85e8c1e70f8a"
   container:
-    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0"
+    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:0.7.0.post2"
   frameworks:
-    dynamo: "1.3.0"
-    tensorrt_llm: "post-1.3.0rc11"
+    dynamo: "0.7.0.post2"
 
 dynamo:
   install: false
@@ -33,12 +32,13 @@ frontend:
 resources:
   gpu_type: "gb200"
   gpus_per_node: 4
-  prefill_nodes: 1
+  spread_workers: true
+  prefill_nodes: 2
   prefill_workers: 2
   gpus_per_prefill: 1
   decode_nodes: 1
   decode_workers: 1
-  gpus_per_decode: 2
+  gpus_per_decode: 4
 
 slurm:
   time_limit: "04:00:00"
@@ -63,8 +63,6 @@ backend:
     NCCL_GRAPH_REGISTER: "0"
     TLLM_LOG_LEVEL: "INFO"
     CACHE_TRANSCEIVER_MAX_NUM_TOKENS: "8448"
-    TRTLLM_FORCE_ALLTOALL_METHOD: "NVLinkOneSided"
-    TRTLLM_MOE_A2A_WORKSPACE_MB: "2048"
 
   trtllm_config:
     prefill:
@@ -93,12 +91,12 @@ backend:
 
     decode:
       backend: "pytorch"
-      tensor_parallel_size: 2
-      moe_expert_parallel_size: 2
+      tensor_parallel_size: 4
+      moe_expert_parallel_size: 1
       pipeline_parallel_size: 1
-      enable_attention_dp: true
+      enable_attention_dp: false
       disable_overlap_scheduler: false
-      max_batch_size: 512
+      max_batch_size: 256
       max_num_tokens: 20000
       max_seq_len: 9419
       print_iter_log: true
@@ -106,7 +104,7 @@ backend:
       num_postprocess_workers: 4
       cuda_graph_config:
         enable_padding: true
-        max_batch_size: 512
+        max_batch_size: 256
       moe_config:
         backend: TRTLLM
       kv_cache_config:
@@ -122,7 +120,7 @@ benchmark:
   type: "sa-bench"
   isl: 8192
   osl: 1024
-  concurrencies: [128, 256]
+  concurrencies: [128]
   req_rate: "inf"
   random_range_ratio: 0.8
   num_prompts_mult: 10

@@ -45,7 +45,6 @@ slurm:
 
 backend:
   type: trtllm
-  request_plane: "none"
 
   prefill_environment:
     PYTHONUNBUFFERED: "1"

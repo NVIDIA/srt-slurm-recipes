@@ -1,11 +1,10 @@
-name: "gpt-oss-120b-trtllm-disagg-gb200-8k1k-dep2-c128-c256-ctr070"
+name: "gpt-oss-120b-trtllm-disagg-gb200-8k1k-saref-p2dtp2-c256-ctr070"
 
 # Upstream reference (InferenceX multi-node disagg launcher):
 #   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/gptoss_fp4_gb200_dynamo-trt.sh
 #
-# DEP2 disagg (P:2xTP1, D:1xDEP2, attention_dp=true) on tensorrtllm-runtime:0.7.0.post2.
-# spread_workers places each TP1 prefill worker on its own node to avoid the fixed IPC
-# port collision (tcp://127.0.0.1:10012) in 0.7.0.post2.
+# Best-perf point at c=256: P:2xTP1, D:1xTP2 (EP1, attention_dp=false).
+# Distinct from DEP2 (EP2 + attention_dp=true). Plain TP2 decode for high-concurrency throughput.
 
 model:
   path: "hf:openai/gpt-oss-120b"
@@ -46,7 +45,6 @@ slurm:
 
 backend:
   type: trtllm
-  request_plane: "none"
 
   prefill_environment:
     PYTHONUNBUFFERED: "1"
@@ -65,9 +63,6 @@ backend:
     NCCL_GRAPH_REGISTER: "0"
     TLLM_LOG_LEVEL: "INFO"
     CACHE_TRANSCEIVER_MAX_NUM_TOKENS: "8448"
-    TRTLLM_MOE_ALLTOALL_BACKEND: "mnnvlthroughput"
-    TRTLLM_FORCE_ALLTOALL_METHOD: "MNNVL"
-    TRTLLM_MOE_A2A_WORKSPACE_MB: "2048"
 
   trtllm_config:
     prefill:
@@ -97,11 +92,11 @@ backend:
     decode:
       backend: "pytorch"
       tensor_parallel_size: 2
-      moe_expert_parallel_size: 2
+      moe_expert_parallel_size: 1
       pipeline_parallel_size: 1
-      enable_attention_dp: true
+      enable_attention_dp: false
       disable_overlap_scheduler: false
-      max_batch_size: 512
+      max_batch_size: 256
       max_num_tokens: 20000
       max_seq_len: 9419
       print_iter_log: true
@@ -109,7 +104,7 @@ backend:
       num_postprocess_workers: 4
       cuda_graph_config:
         enable_padding: true
-        max_batch_size: 512
+        max_batch_size: 256
       moe_config:
         backend: TRTLLM
       kv_cache_config:
@@ -125,7 +120,7 @@ benchmark:
   type: "sa-bench"
   isl: 8192
   osl: 1024
-  concurrencies: [128, 256]
+  concurrencies: [256]
   req_rate: "inf"
   random_range_ratio: 0.8
   num_prompts_mult: 10
