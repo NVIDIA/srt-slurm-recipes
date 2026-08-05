@@ -1,5 +1,8 @@
 # Ported from NVIDIA/srt-slurm:
 #   https://github.com/NVIDIA/srt-slurm/blob/main/recipes/trtllm/gb300-fp4/8k1k/mtp/ctx1_gen4_tep8_batch4_eplb0_mtp3.yaml
+# Verified against the SemiAnalysis InferenceX reference on GB300 (8k/1k, dynamo-trt, MTP).
+# Measured with container nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.1.1 and request_plane: tcp.
+# Both are stated explicitly; re-measure if either is changed.
 name: "ctx1_gen4_tep8_batch4_eplb0_mtp3"
 
 model:
@@ -119,6 +122,7 @@ frontend:
 
 dynamo:
   install: false
+  request_plane: "tcp"
 
 infra:
   etcd_nats_dedicated_node: true
