@@ -30,14 +30,10 @@ model:
 
 | file | ISL / OSL | parallelism sweep | max-model-len |
 |---|---|---|---:|
-| `1k1k.yaml` | 1k / 1k | TP · PP · DP ∈ {1, 2, 4, 8}, EP ∈ {on, off} | 2176 |
-| `8k1k.yaml` | 1k / 1k* | TP · PP · DP ∈ {1, 2, 4, 8}, EP ∈ {on, off} | 2176 |
+| `1k1k.yaml` | 1k / 1k | TP8 · PP1, EP ∈ {on, off} | 2176 |
+| `8k1k.yaml` | 8k / 1k | TP8 · PP1, EP ∈ {on, off} | 9472 |
 
-\* **Note:** `8k1k.yaml` currently sets `isl: 1024 / osl: 1024` with
-`max-model-len: 2176` — identical to `1k1k.yaml`. Update the `benchmark` block
-(and bump `max-model-len`) if an 8k-input sweep is intended.
-
-Both recipes `sweep` over `tensor/pipeline/data-parallel-size` and toggle
+Both recipes use all eight GPUs with fixed TP8/PP1 parallelism and sweep
 `enable-expert-parallel`. Benchmark concurrency sweeps `1 → 1024`,
 `random_range_ratio: 0.8`, `sa-bench`.
 
