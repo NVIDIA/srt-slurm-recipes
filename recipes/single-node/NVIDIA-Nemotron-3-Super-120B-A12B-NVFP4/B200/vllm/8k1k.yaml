@@ -39,9 +39,8 @@ backend:
   vllm_config:
     aggregated:
       served-model-name: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
-      tensor-parallel-size: "{tp}"
-      pipeline-parallel-size: "{pp}"
-      data-parallel-size: "{dp}"
+      tensor-parallel-size: 8
+      pipeline-parallel-size: 1
       enable-expert-parallel: "{ep}"
       max-num-seqs: 1024
       max-model-len: 9472
@@ -66,7 +65,4 @@ benchmark:
   num_warmup_mult: 1
 
 sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
-  dp: [1, 2, 4, 8]
   ep: [true, false]

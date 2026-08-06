@@ -28,9 +28,10 @@ model:
 
 | file | ISL / OSL | parallelism sweep | spec decode | max-model-len |
 |---|---|---|---|---:|
-| `1k1k-mtp.yaml` | 1k / 1k | TP · PP ∈ {1, 2, 4, 8}, EP ∈ {on, off} | DeepSeek MTP (3 tokens) | 2176 |
+| `1k1k-mtp.yaml` | 1k / 1k | TP8 · PP1, EP ∈ {on, off} | DeepSeek MTP (3 tokens) | 2176 |
+| `8k1k-mtp.yaml` | 8k / 1k | TP8 · PP1, EP ∈ {on, off} | DeepSeek MTP (3 tokens) | 9344 |
 
-The recipe `sweep`s over `tensor/pipeline-parallel-size` and toggles
+Both recipes use all eight GPUs with fixed TP8/PP1 parallelism and sweep
 `enable-expert-parallel`. Benchmark concurrency sweeps `1 → 1024`,
 `random_range_ratio: 0.8`, `sa-bench`.
 
