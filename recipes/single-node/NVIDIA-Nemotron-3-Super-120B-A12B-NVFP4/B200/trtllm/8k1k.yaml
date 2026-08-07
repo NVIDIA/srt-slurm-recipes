@@ -42,8 +42,8 @@ backend:
   trtllm_config:
     aggregated:
       backend: "pytorch"
-      tensor_parallel_size: "{tp}"
-      pipeline_parallel_size: "{pp}"
+      tensor_parallel_size: 8
+      pipeline_parallel_size: 1
       moe_expert_parallel_size: "{ep}"
       max_batch_size: 1024
       max_num_tokens: 2176
@@ -60,6 +60,4 @@ benchmark:
   num_warmup_mult: 1
 
 sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
   ep: [1, 2, 4, 8]
