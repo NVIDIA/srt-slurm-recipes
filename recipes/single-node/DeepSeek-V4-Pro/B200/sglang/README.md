@@ -31,10 +31,10 @@ These recipes use a custom benchmark tokenizer
 
 | file | ISL / OSL | parallelism sweep | spec decode | context length |
 |---|---|---|---|---:|
-| `1k1k-mtp.yaml` | 1k / 1k | TP · PP · DP · EP ∈ {1, 2, 4, 8} | EAGLE (1 step, 2 draft tokens) | 2176 |
-| `8k1k-mtp.yaml` | 8k / 1k | TP · PP · DP · EP ∈ {1, 2, 4, 8} | EAGLE (1 step, 2 draft tokens) | 9280 |
+| `1k1k-mtp.yaml` | 1k / 1k | TP8 · PP1 · DP8 · EP8 | EAGLE (1 step, 2 draft tokens) | 2176 |
+| `8k1k-mtp.yaml` | 8k / 1k | TP8 · PP1 · DP8 · EP8 | EAGLE (1 step, 2 draft tokens) | 9280 |
 
-Both recipes `sweep` over `tensor/pipeline/data/expert-parallel-size`. Benchmark
+Both recipes use a fixed full-node DP-attention topology. Benchmark
 concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
 ## Key flags

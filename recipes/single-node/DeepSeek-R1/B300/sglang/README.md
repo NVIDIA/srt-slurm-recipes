@@ -29,10 +29,11 @@ model:
 
 | file | ISL / OSL | parallelism sweep | spec decode | context length |
 |---|---|---|---|---:|
-| `1k1k-mtp.yaml` | 1k / 1k | TP · PP · DP · EP ∈ {1, 2, 4, 8} | EAGLE (2 steps, 3 draft tokens) | 2176 |
+| `1k1k-mtp.yaml` | 1k / 1k | TP8 · PP1 · DP1 · EP8 | EAGLE (2 steps, 3 draft tokens) | 2176 |
+| `8k1k-mtp.yaml` | 8k / 1k | TP8 · PP1 · DP1 · EP8 | EAGLE (2 steps, 3 draft tokens) | 9344 |
 
-The recipe `sweep`s over `tensor/pipeline/data/expert-parallel-size`. Benchmark
-concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
+Both recipes use a fixed full-node topology that matches the eight-GPU worker.
+Benchmark concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
 ## Key flags
 

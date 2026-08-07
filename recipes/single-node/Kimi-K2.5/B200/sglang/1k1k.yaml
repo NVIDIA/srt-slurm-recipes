@@ -56,10 +56,10 @@ backend:
   sglang_config:
     aggregated:
       served-model-name: "nvidia/Kimi-K2.5-NVFP4"
-      tensor-parallel-size: "{tp}"
-      pipeline-parallel-size: "{pp}"
-      data-parallel-size: "{dp}"
-      expert-parallel-size: "{ep}"
+      tensor-parallel-size: 8
+      pipeline-parallel-size: 1
+      data-parallel-size: 1
+      expert-parallel-size: 1
       trust-remote-code: true
       context-length: 2304
       max-running-requests: 1024
@@ -80,9 +80,3 @@ benchmark:
   num_prompts_mult: 10
   num_warmup_mult: 1
   use_chat_template: false
-
-sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
-  dp: [1, 2, 4, 8]
-  ep: [1, 2, 4, 8]

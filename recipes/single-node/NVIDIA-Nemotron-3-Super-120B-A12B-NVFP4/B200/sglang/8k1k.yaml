@@ -38,10 +38,10 @@ backend:
   sglang_config:
     aggregated:
       served-model-name: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
-      tensor-parallel-size: "{tp}"
-      pipeline-parallel-size: "{pp}"
-      data-parallel-size: "{dp}"
-      expert-parallel-size: "{ep}"
+      tensor-parallel-size: 8
+      pipeline-parallel-size: 1
+      data-parallel-size: 1
+      expert-parallel-size: 1
       trust-remote-code: true
       mem-fraction-static: 0.85
       context-length: 9216
@@ -57,9 +57,3 @@ benchmark:
   req_rate: "inf"
   random_range_ratio: 0.8
   num_warmup_mult: 1
-
-sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
-  dp: [1, 2, 4, 8]
-  ep: [1, 2, 4, 8]
