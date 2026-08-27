@@ -1,0 +1,154 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv4_fp4_b300_vllm_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job dsv4-fp4-b300-vllm-agentic-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=4 ep=4 dp-attn=true dcp=1 kv-offloading=dram/vllm-simple spec-decoding=mtp
+# Published concurrencies: 48, 64
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31415828111/attempts/2
+#
+# TOTAL_CPU_DRAM_GB=1424, reproduced from configs/runners.yaml (cluster:b300-nv)
+# and dram-utilization=0.95 by the agentic_dram_offload_gb rule in
+# utils/matrix_logic/generate_sweep_configs.py. Re-derive it for a fleet with
+# different host DRAM.
+#
+# The launcher fronts the engine with vllm-router for session-affine
+# routing across the DP ranks. srt-slurm has no stage for that router, so the
+# equivalent affinity is expressed through the Dynamo frontend below
+# (nginx session affinity + kv router mode).
+
+base:
+  name: agg-b300-fp4-tp4-dep4-vllmsimple-mtp-agentic
+  model:
+    path: hf:deepseek-ai/DeepSeek-V4-Pro
+    container: vllm/vllm-openai:nightly-dev-x86_64-cu13.0.1-426e59f
+    precision: fp4
+  identity:
+    model:
+      repo: deepseek-ai/DeepSeek-V4-Pro
+    container:
+      image: vllm/vllm-openai:nightly-dev-x86_64-cu13.0.1-426e59f
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: b300
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 4
+  frontend:
+    type: dynamo
+    nginx_session_affinity: true
+    nginx_session_affinity_header: X-Dynamo-Session-ID
+    enable_multiple_frontends: true
+    num_additional_frontends: 4
+    args:
+      router-mode: kv
+      router-session-affinity-ttl-secs: '3600'
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: vllm
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      NCCL_NVLS_ENABLE: '1'
+      PYTHONHASHSEED: '42'
+      PYTHONNOUSERSITE: '1'
+      PYTORCH_ALLOC_CONF: expandable_segments:True
+      TORCH_CUDA_ARCH_LIST: '10.0'
+      VLLM_DSV4_MEGA_FP8_COMBINE: '1'
+      VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+      VLLM_FLOAT32_MATMUL_PRECISION: high
+      VLLM_PREFIX_CACHE_RETENTION_INTERVAL: '32768'
+      VLLM_USE_RUST_FRONTEND: '1'
+      VLLM_USE_SIMPLE_KV_OFFLOAD: '1'
+      VLLM_USE_V2_MODEL_RUNNER: '1'
+    vllm_config:
+      aggregated:
+        served-model-name: deepseek-ai/DeepSeek-V4-Pro
+        tensor-parallel-size: 1
+        data-parallel-size: 4
+        trust-remote-code: true
+        kv-cache-dtype: fp8
+        block-size: 256
+        max-model-len: 1048576
+        gpu-memory-utilization: 0.95
+        no-enable-flashinfer-autotune: true
+        tokenizer-mode: deepseek_v4
+        tool-call-parser: deepseek_v4
+        enable-auto-tool-choice: true
+        reasoning-parser: deepseek_v4
+        attention-config: '{"backend":"FLASHINFER_MLA_SPARSE_DSV4","use_prefill_query_quantization":true,"use_fp4_indexer_cache":true}'
+        speculative-config: '{"method":"mtp","num_speculative_tokens":3,"rejection_sample_method":"synthetic","synthetic_acceptance_length":2.49}'
+        no-disable-hybrid-kv-cache-manager: true
+        disable-uvicorn-access-log: true
+        enable-expert-parallel: true
+        enable-ep-weight-filter: true
+        moe-backend: deep_gemm_amxf4_mega_moe
+        prefill-schedule-interval: 8
+        long-prefill-token-threshold: 512
+        max-num-batched-tokens: 8192
+        kv-transfer-config: '{"kv_connector":"SimpleCPUOffloadConnector","kv_role":"kv_both","kv_connector_extra_config":{"cpu_bytes_to_use":356000000000,"enable_cross_layers_blocks":"true","lazy_offload":false}}'
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: deepseek-ai/DeepSeek-V4-Pro
+      MODEL_PREFIX: dsv4
+      FRAMEWORK: vllm
+      PRECISION: fp4
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126
+      IS_MULTINODE: 'false'
+      TP: '4'
+      EP: '4'
+      DP_ATTENTION: 'true'
+      KV_OFFLOADING: dram
+      TOTAL_CPU_DRAM_GB: '1424'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'vllm:'
+      KV_OFFLOAD_BACKEND: vllm-simple
+      AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID: 'true'
+zip_override_conc:
+  name:
+  - agg-b300-fp4-tp4-dep4-vllmsimple-mtp-agentic-c48
+  - agg-b300-fp4-tp4-dep4-vllmsimple-mtp-agentic-c64
+  backend:
+    vllm_config:
+      aggregated:
+        compilation-config:
+        - '{"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88,92,96],"mode":0}'
+        - '{"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88,92,96,100,104,108,112,116,120,124,128],"mode":0}'
+        max-num-seqs:
+        - 24
+        - 32
+  benchmark:
+    env:
+      CONC:
+      - '48'
+      - '64'
+      RESULT_FILENAME:
+      - dsv4_tp4_conc48_vllmsimple
+      - dsv4_tp4_conc64_vllmsimple

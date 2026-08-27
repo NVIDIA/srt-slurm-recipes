@@ -1,0 +1,141 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/minimaxm3_fp8_h100_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job minimaxm3-fp8-h100-vllm-agentic-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=8 ep=1 dp-attn=false dcp=1 kv-offloading=dram/mooncake spec-decoding=mtp
+# Published concurrencies: 6, 8
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31572866180/attempts/2
+#
+# TOTAL_CPU_DRAM_GB=1731, reproduced from configs/runners.yaml (cluster:h100-dgxc)
+# and dram-utilization=0.8 by the agentic_dram_offload_gb rule in
+# utils/matrix_logic/generate_sweep_configs.py. Re-derive it for a fleet with
+# different host DRAM.
+
+base:
+  name: agg-h100-fp8-tp8-mooncake-mtp-agentic
+  model:
+    path: hf:MiniMaxAI/MiniMax-M3-MXFP8
+    container: vllm/vllm-openai:v0.27.1
+    precision: fp8
+  identity:
+    model:
+      repo: MiniMaxAI/MiniMax-M3-MXFP8
+    container:
+      image: vllm/vllm-openai:v0.27.1
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: h100
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 8
+  frontend:
+    type: dynamo
+    enable_multiple_frontends: false
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: vllm
+    connector: null
+    mooncake_kv_store:
+      store_config:
+        metadata_server: P2PHANDSHAKE
+        global_segment_size: 119GB
+        local_buffer_size: 4GB
+        protocol: rdma
+        device_name: ''
+        mode: embedded
+        enable_offload: false
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      MC_ENABLE_DEST_DEVICE_AFFINITY: '1'
+      MC_SLICE_SIZE: '1048576'
+      MC_WORKERS_PER_CTX: '4'
+      PYTHONHASHSEED: '0'
+      PYTHONNOUSERSITE: '1'
+      VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+    vllm_config:
+      aggregated:
+        served-model-name: MiniMaxAI/MiniMax-M3-MXFP8
+        tensor-parallel-size: 8
+        data-parallel-size: 1
+        gpu-memory-utilization: 0.9
+        cpu-offload-gb: 26
+        kv-cache-dtype: fp8
+        attention-backend: TRITON_ATTN
+        block-size: 128
+        language-model-only: true
+        enable-prefix-caching: true
+        enable-prompt-tokens-details: true
+        default-chat-template-kwargs: '{"thinking_mode":"enabled"}'
+        speculative-config: '{"method":"eagle3","model":"Inferact/MiniMax-M3-EAGLE3-GQA","num_speculative_tokens":3,"attention_backend":"FLASH_ATTN","rejection_sample_method":"synthetic","synthetic_acceptance_length":2.78}'
+        tool-call-parser: minimax_m3
+        reasoning-parser: minimax_m3
+        enable-auto-tool-choice: true
+        safetensors-load-strategy: lazy
+        trust-remote-code: true
+        kv-transfer-config: '{"kv_connector":"MooncakeStoreConnector","kv_role":"kv_both","kv_connector_extra_config":{"load_async":true}}'
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: MiniMaxAI/MiniMax-M3-MXFP8
+      MODEL_PREFIX: minimaxm3
+      FRAMEWORK: vllm
+      PRECISION: fp8
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126
+      IS_MULTINODE: 'false'
+      TP: '8'
+      EP: '1'
+      DP_ATTENTION: 'false'
+      KV_OFFLOADING: dram
+      TOTAL_CPU_DRAM_GB: '1731'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'vllm:'
+      KV_OFFLOAD_BACKEND: mooncake
+zip_override_conc:
+  name:
+  - agg-h100-fp8-tp8-mooncake-mtp-agentic-c6
+  - agg-h100-fp8-tp8-mooncake-mtp-agentic-c8
+  backend:
+    vllm_config:
+      aggregated:
+        max-cudagraph-capture-size:
+        - 48
+        - 64
+        max-num-seqs:
+        - 12
+        - 16
+  benchmark:
+    env:
+      CONC:
+      - '6'
+      - '8'
+      RESULT_FILENAME:
+      - minimaxm3_tp8_conc6_mooncake
+      - minimaxm3_tp8_conc8_mooncake

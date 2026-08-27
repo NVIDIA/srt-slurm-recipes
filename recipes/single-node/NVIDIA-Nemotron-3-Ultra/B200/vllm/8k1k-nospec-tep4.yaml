@@ -1,0 +1,62 @@
+name: "nemotron-ultra-nvfp4-b200-vllm-8k1k-nospec-tep4"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container: "vllm/vllm-openai:v0.23.0"
+  precision: "fp4"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+setup_script: vllm-container-deps.sh
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 4
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: "1"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+      tensor-parallel-size: 4
+      pipeline-parallel-size: 1
+      enable-expert-parallel: true
+      trust-remote-code: true
+      max-num-seqs: 1024
+      max-model-len: 32768
+      max-num-batched-tokens: 32768
+      gpu-memory-utilization: 0.95
+      kv-cache-dtype: fp8
+      mamba-ssm-cache-dtype: float16
+      quantization: modelopt
+      enable-chunked-prefill: true
+      no-enable-prefix-caching: true
+
+benchmark:
+  type: "sa-bench"
+  random_range_ratio: 1.0  # fixed ISL/OSL (sa-bench default 0.8 randomizes lengths)
+  isl: 8192
+  osl: 1024
+  concurrencies: "512"
+  num_prompts_mult: 3
+  num_warmup_mult: 1
