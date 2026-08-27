@@ -1,0 +1,63 @@
+name: "nemotron-ultra-nvfp4-b200-vllm-1k1k-native"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container: "vllm/vllm-openai:v0.23.0"
+  precision: "fp4"
+
+dynamo:
+  install: true
+  wheel: "1.2.0.dev20260426"
+
+setup_script: vllm-container-deps.sh
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "b200"
+  gpus_per_node: 4
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: "1"
+
+  vllm_config:
+    aggregated:
+      served-model-name: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+      tensor-parallel-size: "{tp}"
+      pipeline-parallel-size: "{pp}"
+      enable-expert-parallel: true
+      kv-cache-dtype: fp8
+      max-model-len: 32768
+      gpu-memory-utilization: 0.9
+      enable-chunked-prefill: true
+      quantization: modelopt
+      mamba-ssm-cache-dtype: float16
+      trust-remote-code: true
+
+benchmark:
+  type: "sa-bench"
+  random_range_ratio: 1.0  # fixed ISL/OSL (sa-bench default 0.8 randomizes lengths)
+  isl: 1024
+  osl: 1024
+  concurrencies: "1x2x4x8x16x32x64x128x256x512"
+  num_prompts_mult: 3
+  num_warmup_mult: 1
+
+sweep:
+  tp: [4]
+  pp: [1]

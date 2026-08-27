@@ -1,0 +1,138 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/minimaxm3_fp8_h200_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job minimaxm3-fp8-h200-vllm-agentic-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=8 ep=1 dp-attn=false dcp=1 kv-offloading=none spec-decoding=mtp
+# Published concurrencies: 1, 2, 4, 6, 8, 10
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31561686847/attempts/1
+
+base:
+  name: agg-h200-fp8-tp8-kvnone-mtp-agentic
+  model:
+    path: hf:MiniMaxAI/MiniMax-M3-MXFP8
+    container: vllm/vllm-openai:v0.27.1
+    precision: fp8
+  identity:
+    model:
+      repo: MiniMaxAI/MiniMax-M3-MXFP8
+    container:
+      image: vllm/vllm-openai:v0.27.1
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: h200
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 8
+  frontend:
+    type: dynamo
+    enable_multiple_frontends: false
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: vllm
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      PYTHONNOUSERSITE: '1'
+      VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+    vllm_config:
+      aggregated:
+        served-model-name: MiniMaxAI/MiniMax-M3-MXFP8
+        tensor-parallel-size: 8
+        data-parallel-size: 1
+        gpu-memory-utilization: 0.9
+        kv-cache-dtype: fp8
+        attention-backend: TRITON_ATTN
+        block-size: 128
+        language-model-only: true
+        enable-prefix-caching: true
+        enable-prompt-tokens-details: true
+        default-chat-template-kwargs: '{"thinking_mode":"enabled"}'
+        speculative-config: '{"method":"eagle3","model":"Inferact/MiniMax-M3-EAGLE3-GQA","num_speculative_tokens":3,"attention_backend":"FLASH_ATTN","rejection_sample_method":"synthetic","synthetic_acceptance_length":2.78}'
+        tool-call-parser: minimax_m3
+        reasoning-parser: minimax_m3
+        enable-auto-tool-choice: true
+        trust-remote-code: true
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: MiniMaxAI/MiniMax-M3-MXFP8
+      MODEL_PREFIX: minimaxm3
+      FRAMEWORK: vllm
+      PRECISION: fp8
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126
+      IS_MULTINODE: 'false'
+      TP: '8'
+      EP: '1'
+      DP_ATTENTION: 'false'
+      KV_OFFLOADING: none
+      TOTAL_CPU_DRAM_GB: '0'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'vllm:'
+zip_override_conc:
+  name:
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c1
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c2
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c4
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c6
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c8
+  - agg-h200-fp8-tp8-kvnone-mtp-agentic-c10
+  backend:
+    vllm_config:
+      aggregated:
+        max-cudagraph-capture-size:
+        - 8
+        - 16
+        - 32
+        - 48
+        - 64
+        - 80
+        max-num-seqs:
+        - 2
+        - 4
+        - 8
+        - 12
+        - 16
+        - 20
+  benchmark:
+    env:
+      CONC:
+      - '1'
+      - '2'
+      - '4'
+      - '6'
+      - '8'
+      - '10'
+      RESULT_FILENAME:
+      - minimaxm3_tp8_conc1_kvnone
+      - minimaxm3_tp8_conc2_kvnone
+      - minimaxm3_tp8_conc4_kvnone
+      - minimaxm3_tp8_conc6_kvnone
+      - minimaxm3_tp8_conc8_kvnone
+      - minimaxm3_tp8_conc10_kvnone

@@ -1,0 +1,88 @@
+# Reproduces INFBENCH-GOLDEN Nemotron-3-Ultra GB200 TRTLLM-Serve 1.3.0rc16 aggregated rows:
+#   ibdb_gold_50k_2k_both.csv: TP4 (tp4/ep1/pp1, attention_dp=false), MTP speclen 6,
+#   max_num_tokens 50048, stream_interval 20, kv-cache FP8, concurrency 1/2/4.
+# Gold perf (output tps/user): c1=336.5, c2=263.0, c4=177.4
+name: "nemotron-ultra-nvfp4-gb200-trtllm-50k2k-agg-tp4-mtp6"
+
+model:
+  path: "hf:nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0-dev.1-cuda13"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4"
+  container:
+    image: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0-dev.1-cuda13"
+
+dynamo:
+  install: false
+
+slurm:
+  time_limit: "05:00:00"
+
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+
+resources:
+  gpu_type: "gb200"
+  gpus_per_node: 4
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+  env:
+    DYN_REQUEST_PLANE: "tcp"
+    ETCD_LEASE_TTL: "120"
+
+backend:
+  type: trtllm
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    DYN_HEALTH_CHECK_ENABLED: "false"
+    DYN_REQUEST_PLANE: "tcp"
+    ETCD_LEASE_TTL: "120"
+    ENROOT_ALLOW_DEV: "yes"
+    NCCL_GRAPH_MIXING_SUPPORT: "0"
+    TLLM_LOG_LEVEL: "INFO"
+    TRTLLM_SERVER_DISABLE_GC: "1"
+    TRTLLM_WORKER_DISABLE_GC: "1"
+    MIMALLOC_PURGE_DELAY: "0"
+    HF_MODULES_CACHE: "/tmp/hf_modules"
+
+  trtllm_config:
+    aggregated:
+      tensor_parallel_size: 4
+      moe_expert_parallel_size: 1
+      pipeline_parallel_size: 1
+      enable_attention_dp: false
+      trust_remote_code: true
+      max_batch_size: 8
+      max_num_tokens: 50048
+      max_seq_len: 52224
+      print_iter_log: true
+      stream_interval: 20
+      cuda_graph_config:
+        enable_padding: true
+        batch_sizes: [1, 2, 4, 8]
+      kv_cache_config:
+        dtype: fp8
+        enable_block_reuse: false
+        free_gpu_memory_fraction: 0.65
+      speculative_config:
+        decoding_type: MTP
+        num_nextn_predict_layers: 6
+
+benchmark:
+  type: "sa-bench"
+  random_range_ratio: 1.0  # fixed ISL/OSL (sa-bench default 0.8 randomizes lengths)
+  num_prompts_mult: 3  # match aiperf default request count
+  num_warmup_mult: 1
+  isl: 50000
+  osl: 2048
+  concurrencies: [1, 2, 4]
