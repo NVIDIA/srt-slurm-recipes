@@ -21,6 +21,16 @@ When adding a recipe:
 5. Include enough tags in example commands or notes for downstream filtering, for example `official,<model>,<gpu>,<framework>`.
 6. Prefer small, reviewable changes that add or update one sweep family at a time.
 
+## CI Dependency Pins
+
+CI installs upstream `srt-slurm` and runs third-party GitHub Actions, so both are pinned to
+commit SHAs rather than branches or moving tags.
+
+To validate recipes against a newer upstream, bump `SRT_SLURM_REF` in both
+`.github/workflows/dry-run-recipes.yml` and `.gitlab-ci.yml` to the same commit SHA, and update the
+adjacent comment with the corresponding upstream tag. Action pins carry their version as a trailing
+comment; keep that comment accurate when changing a SHA.
+
 ## Developer Certificate of Origin (DCO)
 
 By contributing to this project, you agree to the Developer Certificate of Origin
