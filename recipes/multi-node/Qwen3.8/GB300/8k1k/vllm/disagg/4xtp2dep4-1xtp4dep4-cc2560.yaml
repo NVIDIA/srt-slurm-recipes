@@ -1,0 +1,141 @@
+name: "qwen38-2.4t-nvfp4-gb300-disagg-4xtp2dep4-1xtp4dep4-cc2560"
+
+identity:
+  model:
+    repo: "Inferact/Qwen3.8-2.4T-A95B-NVFP4"
+    revision: "a6abb8bfb82b6965166d4129275f012d8809bc40"
+  container:
+    image: "vllm/vllm-openai:nightly-a9a17e7095a66ef6c6685a1c7ddd657781a78d3c"
+  frameworks:
+    dynamo: "1.2.0.dev20260526"
+    vllm: "0.26.1rc1.dev1177+ga9a17e709"
+
+slurm:
+  time_limit: "2:00:00"
+
+model:
+  path: "hf:Inferact/Qwen3.8-2.4T-A95B-NVFP4"
+  container: "vllm/vllm-openai:nightly-a9a17e7095a66ef6c6685a1c7ddd657781a78d3c"
+  precision: "NVFP4"
+
+dynamo:
+  version: "1.2.0.dev20260526"
+  install: false
+
+resources:
+  gpu_type: "gb300"
+  gpus_per_node: 4
+
+  prefill_nodes: 8
+  prefill_workers: 4
+  gpus_per_prefill: 8
+
+  decode_nodes: 4
+  decode_workers: 1
+  gpus_per_decode: 16
+
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+
+backend:
+  type: vllm
+  connector: null
+
+  prefill_environment:
+    DYN_LOG: "error"
+    DYN_SDK_DISABLE_ANSI_LOGGING: "1"
+    VLLM_LOGGING_COLOR: "0"
+    VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+
+  decode_environment:
+    DYN_LOG: "error"
+    DYN_SDK_DISABLE_ANSI_LOGGING: "1"
+    VLLM_LOGGING_COLOR: "0"
+    VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+
+  vllm_config:
+    prefill:
+      kv-transfer-config: '{"kv_connector": "NixlConnector", "kv_role": "kv_both", "kv_load_failure_policy": "fail"}'
+      tensor-parallel-size: 2
+      pipeline-parallel-size: 1
+      data-parallel-size: 4
+      enable-expert-parallel: true
+      no-disable-hybrid-kv-cache-manager: true
+      generation-config: "vllm"
+      no-enable-prefix-caching: true
+      async-scheduling: true
+      mamba-ssm-cache-dtype: "bfloat16"
+      language-model-only: true
+
+      # Full-Attn state
+      kv-cache-dtype: "fp8"
+
+      # must be > ISL+OSL+chat_template_len
+      max-model-len: 10240
+
+      # must have setting to bound cuda graph sizes to avoid OOM
+      # this setting should NOT affect prefill performance
+      # 32 is arbitrary number here
+      max-num-seqs: 32
+
+      max-num-batched-tokens: 16384
+
+      compilation-config: '{"cudagraph_mode": "PIECEWISE"}'
+
+      # IMPORTANT:
+      # This is NOT a default value for all2all-backend
+      # The default value is "allgather_reducescatter"
+      # This value was changed to "flashinfer_nvlink_one_sided"
+      # because it shows E2E perf improvement
+      all2all-backend: "flashinfer_nvlink_one_sided"
+
+      # IMPORTANT:
+      # NO MTP!!!
+
+    decode:
+      kv-transfer-config: '{"kv_connector": "NixlConnector", "kv_role": "kv_both", "kv_load_failure_policy": "fail"}'
+      tensor-parallel-size: 4
+      pipeline-parallel-size: 1
+      data-parallel-size: 4
+      enable-expert-parallel: true
+      no-disable-hybrid-kv-cache-manager: true
+      generation-config: "vllm"
+      no-enable-prefix-caching: true
+      async-scheduling: true
+      mamba-ssm-cache-dtype: "bfloat16"
+      language-model-only: true
+
+      # Full-Attn state
+      kv-cache-dtype: "fp8"
+
+      # must be > ISL+OSL+chat_template_len
+      max-model-len: 10240
+
+      max-num-seqs: 656                 # max_cc/DP4 + eps = 2560/4 + 16 = 656
+      max-cudagraph-capture-size: 656   # max-num-seqs * (1 + MTP) = 656 * (1 + 0) = 656
+      max-num-batched-tokens: 672       # max-cudagraph-capture-size + eps = 656 + 16 = 672
+      compilation-config: '{"cudagraph_mode": "FULL_DECODE_ONLY"}'
+
+      # IMPORTANT:
+      # This is NOT a default value for all2all-backend
+      # The default value is "allgather_reducescatter"
+      # This value was changed to "flashinfer_nvlink_one_sided"
+      # because it shows E2E perf improvement
+      all2all-backend: "flashinfer_nvlink_one_sided"
+
+      # IMPORTANT:
+      # NO MTP!!!
+
+benchmark:
+  type: "sa-bench"
+  backend: "dynamo"
+  endpoint: "/v1/chat/completions"
+  isl: 8192
+  osl: 1024
+  use_chat_template: true # server renders the template; keeps ISL EXACTLY 8192
+  concurrencies: "2560" # 2048 + 512 = 2560
+  req_rate: "inf"
+  random_range_ratio: 1.0
+  num_prompts_mult: 8
+  num_warmup_mult: 1
