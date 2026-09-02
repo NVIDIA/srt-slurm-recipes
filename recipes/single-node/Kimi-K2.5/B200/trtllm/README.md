@@ -29,10 +29,11 @@ model:
 
 | file | ISL / OSL | parallelism sweep | max seq len | target |
 |---|---|---|---:|---|
-| `1k1k.yaml` | 1k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} | 2304 | 1k/1k throughput sweep |
-| `8k1k.yaml` | 8k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} | 9472 | 8k/1k throughput sweep |
+| `1k1k.yaml` | 1k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} | 2304 | 1k/1k throughput sweep |
+| `8k1k.yaml` | 8k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} | 9472 | 8k/1k throughput sweep |
 
-Both recipes `sweep` over `tensor/pipeline/moe-expert-parallel-size`. The 1k/1k
+Both recipes use TP8/PP1 so the engine world size matches the eight MPI ranks,
+and sweep `moe-expert-parallel-size`. The 1k/1k
 recipe uses `max_num_tokens: 2048`; the 8k/1k recipe `16384`. Benchmark
 concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
