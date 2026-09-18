@@ -61,12 +61,23 @@ DASHBOARD_API = "https://inferencex.semianalysis.com/api/v1/benchmarks"
 # Dashboard display name -> InferenceX model prefix. GLM is out of scope.
 API_MODELS = {
     "DeepSeek-V4-Pro": "dsv4",
+    "DeepSeek-V4.1-Flash": "dsv41flash",
     "Qwen-3.5-397B-A17B": "qwen3.5",
     "MiniMax-M3": "minimaxm3",
     "Kimi-K3": "kimik3",
 }
 # NVIDIA single-node SKUs; AMD rows share the API but are out of scope.
 NVIDIA_HARDWARE = ("b200", "b300", "h100", "h200")
+
+# (prefix, hardware) pairs the API publishes but this tree does not carry yet.
+# DeepSeek-V4.1-Flash is measured on every SKU; only the B300 arm has a launcher
+# of its own upstream, and the shared launcher behind B200/H100/H200 has not been
+# read in. Drop those rows rather than resolve them against the B300 script.
+DEFERRED_POINTS = {
+    ("dsv41flash", "b200"),
+    ("dsv41flash", "h100"),
+    ("dsv41flash", "h200"),
+}
 
 # generate_sweep_configs.py: BYTES_PER_MIB, BYTES_PER_GB and the 3 TB cap.
 BYTES_PER_MIB = 1024 * 1024
@@ -77,17 +88,34 @@ AGENTIC_DURATION_SECONDS = 3600
 
 MODEL_DIRS = {
     "dsv4": "DeepSeek-V4-Pro",
+    "dsv41flash": "DeepSeek-V4.1-Flash",
     "qwen3.5": "Qwen3.5",
     "kimik3": "Kimi-K3",
     "minimaxm3": "MiniMax-M3",
 }
 GPU_DIRS = {
+    # Fleet names are renamed upstream from time to time without the hardware
+    # changing, so both generations of name map to the same directory.
     "cluster:b200-dgxc": "B200",
+    "cluster:b200-nscale": "B200",
     "cluster:b300-nv": "B300",
+    "cluster:b300-dsxe": "B300",
     "cluster:h100-dgxc": "H100",
     "cluster:h200-dgxc": "H200",
 }
+# Campaigns that have not been re-pointed still name the pre-rename fleet, which
+# configs/runners.yaml no longer describes. The SKU and its host DRAM budget are
+# the same either way, so read the fleet facts off the current entry.
+RUNNER_ALIASES = {
+    "cluster:b200-dgxc": "cluster:b200-nscale",
+    "cluster:b300-nv": "cluster:b300-dsxe",
+}
 FRAMEWORK_DIRS = {"sglang": "sglang", "vllm": "vllm", "trt": "trtllm"}
+
+# The master config renamed the SGLang EAGLE draft-model arms from mtp to
+# draft_model without changing what they run; the dashboard still reports them
+# as spec_method=mtp, which is the side the published points are keyed on.
+SPEC_ALIASES = {"draft_model": "mtp"}
 
 # Campaign -> the launcher that runs it. Every campaign maps to exactly one
 # script; two campaigns can share a script and differ only in image or arms.
@@ -96,6 +124,7 @@ LAUNCHERS = {
     "dsv4-fp4-b300-sglang-agentic-hicache-mtp": "dsv4_fp4_b300_sglang_mtp.sh",
     "dsv4-fp4-b200-vllm-agentic-mtp": "dsv4_fp4_b200_vllm_mtp.sh",
     "dsv4-fp4-b300-vllm-agentic-mtp": "dsv4_fp4_b300_vllm_mtp.sh",
+    "dsv41flash-fp4-b300-vllm-agentic-dspark": "dsv41flash_fp4_b300_vllm_mtp.sh",
     "qwen3.5-fp8-b200-sglang-agentic-mtp": "qwen3.5_fp8_b200_sglang_mtp.sh",
     "qwen3.5-fp4-b200-sglang-agentic-mtp": "qwen3.5_fp4_b200_sglang_mtp.sh",
     "qwen3.5-fp8-b300-sglang-agentic-mtp": "qwen3.5_fp8_b300_sglang_mtp.sh",
@@ -122,6 +151,27 @@ UNPUBLISHED_CAMPAIGNS = {
     "qwen3.5-fp8-h100-sglang-agentic",
 }
 
+# Published upstream but not ported here yet. Unlike an unmapped campaign, which
+# is a bug, these are a known backlog: listing them keeps --check meaningful for
+# the rest of the tree instead of failing on the first campaign this repository
+# has not caught up with. Remove an entry when its launcher is read in.
+#
+#   * qwen3.8next: a model family this tree does not carry at all.
+#   * dsv41flash on B200/H100/H200: run from a shared launcher whose flags differ
+#     from the dedicated B300 script; GB200/GB300 are NVL rack SKUs, which belong
+#     in recipes/multi-node per the layout note in the README.
+DEFERRED_CAMPAIGNS = {
+    "qwen3.8next-fp4-b200-sglang-agentic-mtp",
+    "qwen3.8next-fp4-b300-sglang-agentic-mtp",
+    "qwen3.8next-fp8-h100-sglang-agentic-mtp",
+    "qwen3.8next-fp8-h200-sglang-agentic-mtp",
+    "dsv41flash-fp4-b200-vllm-agentic-dspark",
+    "dsv41flash-fp4-gb200-vllm-agentic-dspark",
+    "dsv41flash-fp4-gb300-vllm-agentic-dspark",
+    "dsv41flash-fp4-h100-vllm-agentic-dspark",
+    "dsv41flash-fp4-h200-vllm-agentic-dspark",
+}
+
 # Campaigns whose file names would otherwise collide with a sibling campaign
 # that shares model/platform/framework/precision and arm topology.
 NAME_DISCRIMINATORS = {
@@ -139,6 +189,7 @@ NAME_DISCRIMINATORS = {
 # checkouts), so a recipe carrying it does not name a reproducible corpus.
 WEKA_OVERRIDES = {
     "dsv4": "semianalysis_cc_traces_weka_062126",
+    "dsv41flash": "semianalysis_cc_traces_weka_062126",
     "kimik3": "semianalysis_cc_traces_weka_062126",
     "minimaxm3": "semianalysis_cc_traces_weka_062126",
     "qwen3.5": "semianalysis_cc_traces_weka_062126_256k",
@@ -213,7 +264,10 @@ def fetch_published_rows() -> list[dict]:
                 continue
             if row.get("is_multinode") or row.get("disagg"):
                 continue
-            if (row.get("hardware") or "").lower() not in NVIDIA_HARDWARE:
+            hardware = (row.get("hardware") or "").lower()
+            if hardware not in NVIDIA_HARDWARE:
+                continue
+            if (prefix, hardware) in DEFERRED_POINTS:
                 continue
             rows.append(
                 {
@@ -316,7 +370,9 @@ class Arm:
         self.ep = arm.get("ep", 1)
         self.dcp = arm.get("dcp-size", 1)
         self.dp_attn = bool(arm.get("dp-attn", False))
-        self.spec = arm.get("spec-decoding", "none")
+        self.spec = SPEC_ALIASES.get(
+            arm.get("spec-decoding", "none"), arm.get("spec-decoding", "none")
+        )
         self.offloading = arm.get("kv-offloading", "none")
         backend = arm.get("kv-offload-backend") or {}
         self.offload_backend = backend.get("name")
@@ -511,13 +567,15 @@ def load_arms(inferencex: Path) -> list[Arm]:
         blocks = (job.get("scenarios") or {}).get("agentic-coding")
         if not blocks or job.get("multinode", False) or "glm" in campaign.lower():
             continue
-        if campaign in UNPUBLISHED_CAMPAIGNS:
+        if campaign in UNPUBLISHED_CAMPAIGNS or campaign in DEFERRED_CAMPAIGNS:
             continue
         if campaign not in LAUNCHERS:
             raise SystemExit(f"no launcher mapped for campaign {campaign}")
         for block in blocks:
             for arm in block["search-space"]:
-                arms.append(Arm(campaign, job, block, arm, hardware[job["runner"]]))
+                runner = job["runner"]
+                facts = hardware.get(runner) or hardware[RUNNER_ALIASES[runner]]
+                arms.append(Arm(campaign, job, block, arm, facts))
     return arms
 
 
@@ -751,6 +809,90 @@ def dsv4_vllm(arm: Arm) -> dict:
             "max-num-seqs": max_num_seqs,
             "compilation-config": jdump(compilation),
         }
+
+    return {"env": env, "config": cfg, "per_conc": per_conc}
+
+
+# --------------------------------------------------------------------------
+# Backends: DeepSeek-V4.1-Flash
+# --------------------------------------------------------------------------
+
+# Piecewise capture sizes are multiples of the six-token DSpark verification
+# block (five draft tokens plus the bonus token), denser for small batches. The
+# 2046 ladder pairs with 2048 batched tokens, the 8190 ladder with 8192: each
+# tier captures up to the largest graph its batched-token budget can reach.
+DSV41FLASH_GRAPH_SIZES_2046 = [
+    6, 12, 18, 24, 30, 36, 48, 60, 72, 96, 120, 144, 192, 240, 288, 384, 480,
+    576, 768, 1020, 1536, 2046,
+]
+DSV41FLASH_GRAPH_SIZES_8190 = DSV41FLASH_GRAPH_SIZES_2046 + [3072, 4092, 6144, 8190]
+
+
+def dsv41flash_vllm(arm: Arm) -> dict:
+    env = {
+        "VLLM_ENGINE_READY_TIMEOUT_S": "3600",
+        "VLLM_USE_RUST_FRONTEND": "1",
+    }
+
+    cfg = OrderedDict(
+        [
+            ("served-model-name", arm.model),
+            ("tensor-parallel-size", arm.tp),
+            ("language-model-only", True),
+            ("tokenizer-mode", "deepseek_v41"),
+            ("tool-call-parser", "deepseek_v41"),
+            ("enable-auto-tool-choice", True),
+            ("reasoning-parser", "deepseek_v41"),
+            # Engram tables live in host DRAM and are reached over UVA; the KV
+            # cache stays GPU-resident, so KV_OFFLOADING is none.
+            ("engram-config", jdump({"cpu_offload": True})),
+            # Golden AL 3.51 from golden_al_distribution/dsv41flash_dspark.yaml
+            # (thinking on, five draft tokens). The launcher keeps real block
+            # rejection for accuracy evals only; throughput runs, which is what
+            # these recipes reproduce, use synthetic acceptance.
+            (
+                "speculative-config",
+                jdump(
+                    {
+                        "method": "dspark",
+                        "num_speculative_tokens": 5,
+                        "draft_sample_method": "probabilistic",
+                        "rejection_sample_method": "synthetic",
+                        "synthetic_acceptance_length": 3.51,
+                        "enable_adaptive_verification": False,
+                    }
+                ),
+            ),
+            ("max-model-len", 1048576),
+            ("max-num-seqs", 256),
+            ("disable-uvicorn-access-log", True),
+        ]
+    )
+
+    def per_conc(conc: int) -> dict:
+        if conc <= 4 or (conc >= 128 and arm.tp == 2):
+            sizes, batched = DSV41FLASH_GRAPH_SIZES_2046, 2048
+        else:
+            sizes, batched = DSV41FLASH_GRAPH_SIZES_8190, 8192
+        values = {
+            "max-num-batched-tokens": batched,
+            "max-cudagraph-capture-size": sizes[-1],
+            "compilation-config": jdump(
+                {
+                    "mode": "VLLM_COMPILE",
+                    "cudagraph_mode": "FULL_AND_PIECEWISE",
+                    "cudagraph_capture_sizes": sizes,
+                }
+            ),
+        }
+        if arm.tp == 2:
+            # The launcher raises the memory budget for the one point that needs
+            # it, TP2 at concurrency 128, and otherwise omits the flag. A zipped
+            # key must exist at every point in the recipe, so the rest of the TP2
+            # curve carries vLLM's own 0.9 default; the TP4 curve, where the
+            # launcher never sets it, leaves the flag out entirely.
+            values["gpu-memory-utilization"] = 0.97 if conc >= 128 else 0.9
+        return values
 
     return {"env": env, "config": cfg, "per_conc": per_conc}
 
@@ -1274,6 +1416,7 @@ def minimax_trtllm(arm: Arm) -> dict:
 BACKENDS = {
     ("dsv4", "sglang"): dsv4_sglang,
     ("dsv4", "vllm"): dsv4_vllm,
+    ("dsv41flash", "vllm"): dsv41flash_vllm,
     ("qwen3.5", "sglang"): qwen_sglang,
     ("kimik3", "vllm"): kimi_vllm,
     ("minimaxm3", "vllm"): minimax_vllm,

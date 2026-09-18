@@ -49,6 +49,13 @@ concurrencies as `zip_override_conc` variants. Submit the whole curve with
 | [`agg-b300-fp4-tp8-dep8-hicache-mtp-agentic.yaml`](DeepSeek-V4-Pro/B300/sglang/agentic/agg-b300-fp4-tp8-dep8-hicache-mtp-agentic.yaml) | B300 | sglang | agg | FP4 | MTP | [source](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv4_fp4_b300_sglang_mtp.sh) |
 | [`agg-b300-fp4-tp8-kvnone-mtp-agentic.yaml`](DeepSeek-V4-Pro/B300/sglang/agentic/agg-b300-fp4-tp8-kvnone-mtp-agentic.yaml) | B300 | sglang | agg | FP4 | MTP | [source](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv4_fp4_b300_sglang_mtp.sh) |
 
+### DeepSeek-V4.1-Flash
+
+| Recipe | GPU | Framework | Mode | Precision | Spec | InferenceX |
+|---|---|---|---|---|---|---|
+| [`agg-b300-fp4-tp2-kvnone-mtp-agentic.yaml`](DeepSeek-V4.1-Flash/B300/vllm/agentic/agg-b300-fp4-tp2-kvnone-mtp-agentic.yaml) | B300 | vllm | agg | FP4 | MTP | [source](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv41flash_fp4_b300_vllm_mtp.sh) |
+| [`agg-b300-fp4-tp4-kvnone-mtp-agentic.yaml`](DeepSeek-V4.1-Flash/B300/vllm/agentic/agg-b300-fp4-tp4-kvnone-mtp-agentic.yaml) | B300 | vllm | agg | FP4 | MTP | [source](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv41flash_fp4_b300_vllm_mtp.sh) |
+
 ### Kimi-K3
 
 | Recipe | GPU | Framework | Mode | Precision | Spec | InferenceX |

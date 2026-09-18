@@ -149,6 +149,12 @@ Per-recipe index with InferenceX source links:
       <td>13</td>
     </tr>
     <tr>
+      <td><code>DeepSeek-V4.1-Flash</code></td>
+      <td><a href="recipes/single-node/DeepSeek-V4.1-Flash/B300/">&#9989;</a> vllm 2</td>
+      <td><span title="No AgentX recipe ported for this platform">&#10134;</span></td>
+      <td>2</td>
+    </tr>
+    <tr>
       <td><code>Kimi-K3</code></td>
       <td><a href="recipes/single-node/Kimi-K3/B300/">&#9989;</a> vllm 4</td>
       <td><span title="No AgentX recipe ported for this platform">&#10134;</span></td>
