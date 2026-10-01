@@ -49,10 +49,10 @@ backend:
   sglang_config:
     aggregated:
       served-model-name: "deepseek-ai/DeepSeek-R1-0528"
-      tensor-parallel-size: "{tp}"
-      pipeline-parallel-size: "{pp}"
-      data-parallel-size: "{dp}"
-      ep-size: "{ep}"
+      tensor-parallel-size: 8
+      pipeline-parallel-size: 1
+      data-parallel-size: 1
+      ep-size: 8
       enable-dp-attention: false
       trust-remote-code: true
       quantization: "modelopt_fp4"
@@ -84,9 +84,3 @@ benchmark:
   random_range_ratio: 0.8
   num_warmup_mult: 1
   use_chat_template: false
-
-sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
-  dp: [1, 2, 4, 8]
-  ep: [1, 2, 4, 8]

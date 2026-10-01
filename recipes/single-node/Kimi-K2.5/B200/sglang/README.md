@@ -29,10 +29,10 @@ model:
 
 | file | ISL / OSL | parallelism sweep | context length | target |
 |---|---|---|---:|---|
-| `1k1k.yaml` | 1k / 1k | TP · PP · DP · EP ∈ {1, 2, 4, 8} | 2304 | 1k/1k throughput sweep |
-| `8k1k.yaml` | 8k / 1k | TP · PP · DP · EP ∈ {1, 2, 4, 8} | 9472 | 8k/1k throughput sweep |
+| `1k1k.yaml` | 1k / 1k | TP8 · PP1 · DP1 · EP1 | 2304 | 1k/1k throughput sweep |
+| `8k1k.yaml` | 8k / 1k | TP8 · PP1 · DP1 · EP1 | 9472 | 8k/1k throughput sweep |
 
-Both recipes `sweep` over `tensor/pipeline/data/expert-parallel-size`. Benchmark
+Both recipes use a fixed full-node topology. Benchmark
 concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
 ## Key flags
