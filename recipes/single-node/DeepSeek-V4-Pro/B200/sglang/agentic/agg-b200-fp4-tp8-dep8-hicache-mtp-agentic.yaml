@@ -1,0 +1,174 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/dsv4_fp4_b200_sglang_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job dsv4-fp4-b200-sglang-agentic-hicache-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=8 ep=8 dp-attn=true dcp=1 kv-offloading=dram/hicache spec-decoding=mtp
+# Published concurrencies: 32, 64, 96
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32454316647/attempts/1
+#
+# TOTAL_CPU_DRAM_GB=2399, reproduced from configs/runners.yaml (cluster:b200-dgxc)
+# and dram-utilization=0.8 by the agentic_dram_offload_gb rule in
+# utils/matrix_logic/generate_sweep_configs.py. Re-derive it for a fleet with
+# different host DRAM.
+#
+# The launcher fronts the engine with sglang-router for session-affine
+# routing across the DP ranks. srt-slurm has no stage for that router, so the
+# equivalent affinity is expressed through the Dynamo frontend below
+# (nginx session affinity + kv router mode).
+
+base:
+  name: agg-b200-fp4-tp8-dep8-hicache-mtp-agentic
+  model:
+    path: hf:deepseek-ai/DeepSeek-V4-Pro
+    container: lmsysorg/sglang:dev-nightly-0820
+    precision: fp4
+  identity:
+    model:
+      repo: deepseek-ai/DeepSeek-V4-Pro
+    container:
+      image: lmsysorg/sglang:dev-nightly-0820
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: b200
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 8
+  frontend:
+    type: dynamo
+    nginx_session_affinity: true
+    nginx_session_affinity_header: X-Dynamo-Session-ID
+    enable_multiple_frontends: true
+    num_additional_frontends: 4
+    args:
+      router-mode: kv
+      router-session-affinity-ttl-secs: '3600'
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: sglang
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      PYTHONNOUSERSITE: '1'
+      SGLANG_ENABLE_UNIFIED_RADIX_TREE: '1'
+      SGLANG_JIT_DEEPGEMM_FAST_WARMUP: '1'
+      SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK: '8320'
+      SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS: '1'
+      SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND: '1'
+      SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT: '1'
+      SGLANG_OPT_UNIFIED_CACHE_FREE_OUT_OF_WINDOW_SLOTS: '1'
+      SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2: '1'
+      SGLANG_OPT_USE_JIT_INDEXER_METADATA: '1'
+      SGLANG_OPT_USE_JIT_NORM: '1'
+      SGLANG_OPT_USE_TOPK_V2: '1'
+      SGLANG_SIMULATE_ACC_LEN: '2.49'
+      SGLANG_SIMULATE_ACC_METHOD: match-expected
+      SGLANG_SIMULATE_ACC_TOKEN_MODE: real-draft-token
+      SGLANG_TIMEOUT_KEEP_ALIVE: '900'
+      TORCH_CUDA_ARCH_LIST: '10.0'
+    sglang_config:
+      aggregated:
+        served-model-name: deepseek-ai/DeepSeek-V4-Pro
+        trust-remote-code: true
+        tp-size: 8
+        mem-fraction-static: 0.88
+        swa-full-tokens-ratio: 0.02
+        chunked-prefill-size: 65536
+        enable-deepseek-v4-fp4-indexer: true
+        disable-flashinfer-autotune: true
+        weight-loader-prefetch-checkpoints: true
+        dp-size: 8
+        tokenizer-worker-num: 8
+        enable-prefill-delayer: true
+        prefill-decode-interval: 10
+        enable-dp-attention: true
+        enable-dp-attention-local-control-broadcast: true
+        incremental-streaming-output: true
+        stream-interval: 20
+        ep-size: 8
+        moe-a2a-backend: megamoe
+        disable-shared-experts-fusion: true
+        tool-call-parser: deepseekv4
+        reasoning-parser: deepseek-v4
+        watchdog-timeout: 1800
+        speculative-algorithm: EAGLE
+        speculative-num-steps: 3
+        speculative-eagle-topk: 1
+        speculative-num-draft-tokens: 4
+        enable-metrics: true
+        enable-cache-report: true
+        enable-hierarchical-cache: true
+        hicache-ratio: 8
+        hicache-write-policy: write_through
+        hicache-io-backend: direct
+        hicache-mem-layout: page_first_direct
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: deepseek-ai/DeepSeek-V4-Pro
+      MODEL_PREFIX: dsv4
+      FRAMEWORK: sglang
+      PRECISION: fp4
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126
+      IS_MULTINODE: 'false'
+      TP: '8'
+      EP: '8'
+      DP_ATTENTION: 'true'
+      KV_OFFLOADING: dram
+      TOTAL_CPU_DRAM_GB: '2399'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'sglang:'
+      KV_OFFLOAD_BACKEND: hicache
+      AIPERF_HTTP_X_DYNAMO_SESSION_ID_FROM_CORRELATION_ID: 'true'
+zip_override_conc:
+  name:
+  - agg-b200-fp4-tp8-dep8-hicache-mtp-agentic-c32
+  - agg-b200-fp4-tp8-dep8-hicache-mtp-agentic-c64
+  - agg-b200-fp4-tp8-dep8-hicache-mtp-agentic-c96
+  backend:
+    sglang_config:
+      aggregated:
+        cuda-graph-max-bs:
+        - 64
+        - 128
+        - 192
+        max-running-requests:
+        - 64
+        - 128
+        - 192
+  benchmark:
+    env:
+      CONC:
+      - '32'
+      - '64'
+      - '96'
+      RESULT_FILENAME:
+      - dsv4_tp8_conc32_hicache
+      - dsv4_tp8_conc64_hicache
+      - dsv4_tp8_conc96_hicache

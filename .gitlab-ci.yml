@@ -8,6 +8,8 @@ dry-run-recipes:
     PIP_DISABLE_PIP_VERSION_CHECK: "1"
     UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
     SRT_SLURM_DIR: "$CI_PROJECT_DIR/srt-slurm"
+    # NVIDIA/srt-slurm v1.0.82. Keep in sync with SRT_SLURM_REF in .github/workflows/dry-run-recipes.yml.
+    SRT_SLURM_REF: "eff783605da8230e90e5dd3382c47f973ce14461"
     RECIPES_ROOT: "$CI_PROJECT_DIR/recipes"
     SRTCTL_WORKDIR: "$CI_PROJECT_DIR/srt-slurm"
     SRTSLURM_CONFIG: "$CI_PROJECT_DIR/.ci/srtslurm.yaml"
@@ -34,7 +36,11 @@ dry-run-recipes:
   before_script:
     - python --version
     - python -m pip install --upgrade pip uv
-    - git clone --depth 1 https://github.com/NVIDIA/srt-slurm.git "$SRT_SLURM_DIR"
+    - git init -q "$SRT_SLURM_DIR"
+    - git -C "$SRT_SLURM_DIR" remote add origin https://github.com/NVIDIA/srt-slurm.git
+    - git -C "$SRT_SLURM_DIR" fetch --depth 1 origin "$SRT_SLURM_REF"
+    - git -C "$SRT_SLURM_DIR" checkout -q --detach FETCH_HEAD
+    - test "$(git -C "$SRT_SLURM_DIR" rev-parse HEAD)" = "$SRT_SLURM_REF"
     - cd "$SRT_SLURM_DIR"
     - uv venv
     - uv pip install -e .

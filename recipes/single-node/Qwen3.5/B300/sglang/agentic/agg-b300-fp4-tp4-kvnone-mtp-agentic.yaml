@@ -1,0 +1,206 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/qwen3.5_fp4_b300_sglang_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job qwen3.5-fp4-b300-sglang-agentic-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=4 ep=1 dp-attn=false dcp=1 kv-offloading=none spec-decoding=mtp
+# Published concurrencies: 1, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 60, 64, 68, 72
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/30730541420/attempts/1
+
+base:
+  name: agg-b300-fp4-tp4-kvnone-mtp-agentic
+  model:
+    path: hf:nvidia/Qwen3.5-397B-A17B-NVFP4
+    container: lmsysorg/sglang:v0.5.16-cu130
+    precision: fp4
+  identity:
+    model:
+      repo: nvidia/Qwen3.5-397B-A17B-NVFP4
+    container:
+      image: lmsysorg/sglang:v0.5.16-cu130
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: b300
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 4
+  frontend:
+    type: dynamo
+    enable_multiple_frontends: false
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: sglang
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      NCCL_NVLS_ENABLE: '1'
+      PYTHONNOUSERSITE: '1'
+      SGLANG_ENABLE_FLASHINFER_GEMM: 'true'
+      SGLANG_SIMULATE_ACC_LEN: '3.39'
+      SGLANG_SIMULATE_ACC_METHOD: match-expected
+      SGLANG_SIMULATE_ACC_TOKEN_MODE: real-draft-token
+      SGLANG_TIMEOUT_KEEP_ALIVE: '1800'
+      SGL_ENABLE_JIT_DEEPGEMM: 'false'
+      TORCH_CUDA_ARCH_LIST: '10.0'
+    sglang_config:
+      aggregated:
+        served-model-name: nvidia/Qwen3.5-397B-A17B-NVFP4
+        trust-remote-code: true
+        tp-size: 4
+        dp-size: 1
+        ep-size: 1
+        enable-symm-mem: true
+        quantization: modelopt_fp4
+        fp4-gemm-backend: flashinfer_cutlass
+        kv-cache-dtype: fp8_e4m3
+        mamba-ssm-dtype: bfloat16
+        attention-backend: trtllm_mha
+        moe-runner-backend: flashinfer_trtllm
+        max-prefill-tokens: 16384
+        chunked-prefill-size: 16384
+        mem-fraction-static: 0.8
+        stream-interval: 50
+        scheduler-recv-interval: 10
+        tokenizer-worker-num: 6
+        tokenizer-path: nvidia/Qwen3.5-397B-A17B-NVFP4
+        reasoning-parser: qwen3
+        tool-call-parser: qwen3_coder
+        speculative-algorithm: NEXTN
+        speculative-num-steps: 3
+        speculative-eagle-topk: 1
+        speculative-num-draft-tokens: 4
+        enable-metrics: true
+        enable-cache-report: true
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: nvidia/Qwen3.5-397B-A17B-NVFP4
+      MODEL_PREFIX: qwen3.5
+      FRAMEWORK: sglang
+      PRECISION: fp4
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126_256k
+      IS_MULTINODE: 'false'
+      TP: '4'
+      EP: '1'
+      DP_ATTENTION: 'false'
+      KV_OFFLOADING: none
+      TOTAL_CPU_DRAM_GB: '0'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'sglang:'
+zip_override_conc:
+  name:
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c1
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c4
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c8
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c12
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c16
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c20
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c24
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c28
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c32
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c40
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c48
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c56
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c60
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c64
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c68
+  - agg-b300-fp4-tp4-kvnone-mtp-agentic-c72
+  backend:
+    sglang_config:
+      aggregated:
+        cuda-graph-max-bs:
+        - 1
+        - 4
+        - 8
+        - 12
+        - 16
+        - 20
+        - 24
+        - 28
+        - 32
+        - 40
+        - 48
+        - 56
+        - 60
+        - 64
+        - 64
+        - 64
+        max-running-requests:
+        - 2
+        - 8
+        - 16
+        - 24
+        - 32
+        - 40
+        - 48
+        - 56
+        - 64
+        - 80
+        - 96
+        - 112
+        - 120
+        - 128
+        - 136
+        - 144
+  benchmark:
+    env:
+      CONC:
+      - '1'
+      - '4'
+      - '8'
+      - '12'
+      - '16'
+      - '20'
+      - '24'
+      - '28'
+      - '32'
+      - '40'
+      - '48'
+      - '56'
+      - '60'
+      - '64'
+      - '68'
+      - '72'
+      RESULT_FILENAME:
+      - qwen3.5_tp4_conc1_kvnone
+      - qwen3.5_tp4_conc4_kvnone
+      - qwen3.5_tp4_conc8_kvnone
+      - qwen3.5_tp4_conc12_kvnone
+      - qwen3.5_tp4_conc16_kvnone
+      - qwen3.5_tp4_conc20_kvnone
+      - qwen3.5_tp4_conc24_kvnone
+      - qwen3.5_tp4_conc28_kvnone
+      - qwen3.5_tp4_conc32_kvnone
+      - qwen3.5_tp4_conc40_kvnone
+      - qwen3.5_tp4_conc48_kvnone
+      - qwen3.5_tp4_conc56_kvnone
+      - qwen3.5_tp4_conc60_kvnone
+      - qwen3.5_tp4_conc64_kvnone
+      - qwen3.5_tp4_conc68_kvnone
+      - qwen3.5_tp4_conc72_kvnone

@@ -31,10 +31,11 @@ These recipes use a custom benchmark tokenizer
 
 | file | ISL / OSL | parallelism sweep | spec decode | max seq len |
 |---|---|---|---|---:|
-| `1k1k-mtp.yaml` | 1k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} + attention-DP | MTP (2 nextn layers) | 8192 |
-| `8k1k-mtp.yaml` | 8k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} + attention-DP | MTP (2 nextn layers) | 9280 |
+| `1k1k-mtp.yaml` | 1k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} + attention-DP | MTP (2 nextn layers) | 8192 |
+| `8k1k-mtp.yaml` | 8k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} + attention-DP | MTP (2 nextn layers) | 9280 |
 
-Both recipes `sweep` over `tensor/pipeline/moe-expert-parallel-size`. Benchmark
+Both recipes use TP8/PP1 so the engine world size matches the eight MPI ranks,
+and sweep `moe-expert-parallel-size`. Benchmark
 concurrency sweeps `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
 ## Key flags

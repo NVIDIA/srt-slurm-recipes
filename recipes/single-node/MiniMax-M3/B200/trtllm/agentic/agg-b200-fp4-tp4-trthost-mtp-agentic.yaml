@@ -1,0 +1,363 @@
+# InferenceX AgentX source:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/agentic/minimaxm3_fp4_b200_trt_mtp.sh
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/configs/nvidia-master.yaml  (job minimaxm3-fp4-b200-trtllm-agentic-mtp)
+# See recipes/single-node/AGENTX.md
+#
+# Single-node AgentX has no published YAML: InferenceX runs it as a
+# master-config search space driven by the launcher above. This recipe is one
+# published serving configuration, taken from the InferenceX dashboard API,
+# with the launcher's engine configuration declared here and the client side
+# left on InferenceX agentic_srt.sh:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+#
+# Serving config: tp=4 ep=1 dp-attn=false dcp=1 kv-offloading=dram/native spec-decoding=mtp
+# Published concurrencies: 5, 10, 15, 20, 25, 30, 35, 40, 45
+# Every concurrency above is a published datapoint, and the launcher derives
+# engine settings from it, so each is a zip_override_conc variant instead of
+# being flattened away:
+#   srtctl apply -f <this file>:zip_override_conc[<index>]
+#
+# Published runs:
+#   https://github.com/SemiAnalysisAI/InferenceX/actions/runs/32310416645/attempts/1
+#
+# TOTAL_CPU_DRAM_GB=1199, reproduced from configs/runners.yaml (cluster:b200-dgxc)
+# and dram-utilization=0.8 by the agentic_dram_offload_gb rule in
+# utils/matrix_logic/generate_sweep_configs.py. Re-derive it for a fleet with
+# different host DRAM.
+#
+# ENROOT_ALLOW_DEV is 'y' where the launcher exports 'yes': srtctl re-reads
+# resolved override variants with a YAML 1.1 loader, which turns bare yes
+# into a boolean and fails env validation. Enroot enables the setting on any
+# non-empty value, so the two are equivalent.
+
+base:
+  name: agg-b200-fp4-tp4-trthost-mtp-agentic
+  model:
+    path: hf:nvidia/MiniMax-M3-NVFP4
+    container: nvcr.io/nvidia/tensorrt-llm/release:1.3.0rc23.post1
+    precision: fp4
+  identity:
+    model:
+      repo: nvidia/MiniMax-M3-NVFP4
+    container:
+      image: nvcr.io/nvidia/tensorrt-llm/release:1.3.0rc23.post1
+  dynamo:
+    install: false
+  slurm:
+    time_limit: 08:00:00
+  health_check:
+    max_attempts: 1440
+    interval_seconds: 10
+  resources:
+    gpu_type: b200
+    gpus_per_node: 8
+    agg_nodes: 1
+    agg_workers: 1
+    gpus_per_agg: 4
+  frontend:
+    type: dynamo
+    enable_multiple_frontends: false
+  infra:
+    nats_max_payload_mb: 32
+  backend:
+    type: trtllm
+    aggregated_environment:
+      PYTHONUNBUFFERED: '1'
+      DYN_HEALTH_CHECK_ENABLED: 'false'
+      ENROOT_ALLOW_DEV: y
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      MIMALLOC_PURGE_DELAY: '0'
+      NCCL_GRAPH_MIXING_SUPPORT: '0'
+      PYTHONNOUSERSITE: '1'
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      TLLM_LOG_LEVEL: INFO
+      TLLM_PROFILE_LOG_RANKS: all
+      TLLM_SPEC_DECODE_FORCE_NUM_ACCEPTED_TOKENS: '1.78'
+      TQDM_DISABLE: '1'
+      TRTLLM_ENABLE_PDL: '1'
+      TRTLLM_SERVER_DISABLE_GC: '1'
+      TRTLLM_SERVE_ENABLE_MSGSPEC: '1'
+      TRTLLM_TORCH_COMPILE_CONTEXT_ONLY: '1'
+      TRTLLM_WORKER_DISABLE_GC: '1'
+    trtllm_config:
+      aggregated:
+        tensor_parallel_size: 4
+        max_seq_len: 1048576
+        max_num_tokens: 16384
+        torch_compile_config:
+          enable_fullgraph: true
+          enable_inductor: false
+          enable_piecewise_cuda_graph: true
+          capture_num_tokens:
+          - 1
+          - 512
+          - 1024
+          - 2048
+          enable_userbuffers: true
+          max_num_streams: 3
+        moe_config:
+          backend: TRTLLM
+          use_low_precision_moe_combine: true
+        sparse_attention_config:
+          algorithm: minimax_m3
+          implementation: msa
+          indexer_kv_dtype: fp8
+          sparse_disable_index_value: true
+          fuse_qkv_index_projection: true
+        kv_cache_config:
+          free_gpu_memory_fraction: 0.94
+          enable_block_reuse: true
+          block_reuse_policy: per_conversation
+          tokens_per_block: 128
+          use_kv_cache_manager_v2: true
+          dtype: fp8
+          event_buffer_max_size: 0
+          host_cache_size: 268435456000
+        speculative_config:
+          decoding_type: Eagle3
+          max_draft_len: 3
+          speculative_model: Inferact/MiniMax-M3-EAGLE3-GQA
+        scheduler_config:
+          capacity_scheduler_policy: MAX_UTILIZATION
+        enable_chunked_prefill: true
+        enable_autotuner: true
+        trust_remote_code: true
+        reasoning_parser: minimax_m3
+        stream_interval: 20
+        print_iter_log: true
+        num_postprocess_workers: 8
+        enable_attention_dp: false
+  benchmark:
+    type: custom
+    # https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh
+    command: bash /infmax-workspace/benchmarks/multi_node/agentic_srt.sh
+    env:
+      INFMAX_CONTAINER_WORKSPACE: /infmax-workspace
+      RESULT_DIR: /logs/agentic
+      PORT: '8000'
+      MODEL: nvidia/MiniMax-M3-NVFP4
+      MODEL_PREFIX: minimaxm3
+      FRAMEWORK: trt
+      PRECISION: fp4
+      DURATION: '3600'
+      WEKA_LOADER_OVERRIDE: semianalysis_cc_traces_weka_062126
+      IS_MULTINODE: 'false'
+      TP: '4'
+      EP: '1'
+      DP_ATTENTION: 'false'
+      KV_OFFLOADING: dram
+      TOTAL_CPU_DRAM_GB: '1199'
+      AIPERF_REQUIRED_SERVER_METRIC_PREFIX: 'tensorrt_llm:'
+      KV_OFFLOAD_BACKEND: native
+zip_override_conc:
+  name:
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c5
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c10
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c15
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c20
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c25
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c30
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c35
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c40
+  - agg-b200-fp4-tp4-trthost-mtp-agentic-c45
+  backend:
+    trtllm_config:
+      aggregated:
+        cuda_graph_config:
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 17
+          - 19
+          - 21
+          - 23
+          - 25
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 14
+          - 16
+          - 18
+          - 20
+          - 22
+          - 24
+          - 27
+          - 30
+        - enable_padding: true
+          batch_sizes:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 14
+          - 17
+          - 20
+          - 23
+          - 26
+          - 29
+          - 32
+          - 35
+        - enable_padding: true
+          batch_sizes:
+          - 2
+          - 4
+          - 6
+          - 8
+          - 10
+          - 12
+          - 14
+          - 16
+          - 18
+          - 20
+          - 22
+          - 24
+          - 26
+          - 28
+          - 30
+          - 32
+          - 34
+          - 36
+          - 38
+          - 40
+        - enable_padding: true
+          batch_sizes:
+          - 2
+          - 4
+          - 6
+          - 8
+          - 10
+          - 12
+          - 14
+          - 16
+          - 18
+          - 21
+          - 24
+          - 27
+          - 30
+          - 33
+          - 36
+          - 39
+          - 42
+          - 45
+        max_batch_size:
+        - 5
+        - 10
+        - 15
+        - 20
+        - 25
+        - 30
+        - 35
+        - 40
+        - 45
+  benchmark:
+    env:
+      CONC:
+      - '5'
+      - '10'
+      - '15'
+      - '20'
+      - '25'
+      - '30'
+      - '35'
+      - '40'
+      - '45'
+      RESULT_FILENAME:
+      - minimaxm3_tp4_conc5_trthost
+      - minimaxm3_tp4_conc10_trthost
+      - minimaxm3_tp4_conc15_trthost
+      - minimaxm3_tp4_conc20_trthost
+      - minimaxm3_tp4_conc25_trthost
+      - minimaxm3_tp4_conc30_trthost
+      - minimaxm3_tp4_conc35_trthost
+      - minimaxm3_tp4_conc40_trthost
+      - minimaxm3_tp4_conc45_trthost

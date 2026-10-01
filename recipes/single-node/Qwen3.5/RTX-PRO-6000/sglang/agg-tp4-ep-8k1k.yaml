@@ -1,0 +1,93 @@
+# ** Upstream reference:
+#   https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/single_node/fixed_seq_len/qwen3.5_fp4_rtx6000pro_sglang.sh
+name: "qwen3.5-397b-rtxpro6000-fp4-agg-tp4-ep-8k1k"
+
+model:
+  path: "hf:nvidia/Qwen3.5-397B-A17B-NVFP4"
+  container: "lmsysorg/sglang:v0.5.16-cu130"
+  precision: "fp4"
+
+identity:
+  model:
+    repo: "nvidia/Qwen3.5-397B-A17B-NVFP4"
+    revision: "67eb9fda23a430b41f629c016c96fdc7bcbd43f5"
+  container:
+    image: "lmsysorg/sglang:v0.5.16-cu130"
+  frameworks:
+    sglang: "0.5.16"
+
+dynamo:
+  install: false
+
+health_check:
+  max_attempts: 360
+  interval_seconds: 10
+
+resources:
+  gpu_type: "rtx6000pro"
+  gpus_per_node: 8
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+
+frontend:
+  type: sglang
+
+backend:
+  type: sglang
+
+  aggregated_environment:
+    PYTHONUNBUFFERED: "1"
+    PYTHONNOUSERSITE: "1"
+    SGLANG_ENABLE_JIT_DEEPGEMM: "false"
+    NCCL_IB_DISABLE: "1"
+
+  sglang_config:
+    aggregated:
+      served-model-name: "nvidia/Qwen3.5-397B-A17B-NVFP4"
+      trust-remote-code: true
+
+      tensor-parallel-size: 4
+      data-parallel-size: 1
+      ep-size: 4
+
+      reasoning-parser: qwen3
+      tool-call-parser: qwen3_coder
+
+      # SM120 has no trtllm-gen kernels, so both the NVFP4 GEMMs and the
+      # routed experts run on FlashInfer CUTLASS, and attention runs on
+      # plain FlashInfer instead of trtllm_mha.
+      quantization: modelopt_fp4
+      fp4-gemm-backend: flashinfer_cutlass
+      moe-runner-backend: flashinfer_cutlass
+      attention-backend: flashinfer
+      kv-cache-dtype: fp8_e4m3
+      mamba-ssm-dtype: bfloat16
+      mamba-scheduler-strategy: no_buffer
+
+      # The node is PCIe-only: use plain NCCL collectives instead of the
+      # custom all-reduce the NVLink-connected recipes rely on.
+      disable-custom-all-reduce: true
+
+      # 96 GiB per GPU leaves far less headroom than the B300 recipe assumes
+      # (weights ~56 GiB/rank + ~7 GiB CUDA graphs). 0.8 grew the KV pool to
+      # 2.2M tokens and OOM'd on the first 8k prefill; 0.7 with a 2-request
+      # prefill chunk keeps the activation peak bounded.
+      mem-fraction-static: 0.7
+      chunked-prefill-size: 16384
+      max-prefill-tokens: 16384
+      context-length: 9236
+      max-running-requests: 128
+      disable-radix-cache: true
+      scheduler-recv-interval: 30
+      tokenizer-worker-num: 1
+      stream-interval: 20
+
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 1024
+  random_range_ratio: 0.8
+  num_prompts_mult: 10
+  concurrencies: "1x4x16x64"
+  req_rate: "inf"

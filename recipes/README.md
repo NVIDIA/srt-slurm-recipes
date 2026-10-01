@@ -53,6 +53,33 @@ uv run srtctl apply   -f "${RECIPES_PATH}/recipes/multi-node/DeepSeek-R1/B300/sg
 
 Use `srtctl dry-run` before submitting jobs to confirm the final sweep expansion and cluster configuration. After submission, use the normal `srt-slurm` job logs and analysis workflow to inspect results.
 
+### Running an AgentX Recipe
+
+Recipes under an `agentic/` directory need one extra prerequisite. They set `benchmark.type: custom` and run [`agentic_srt.sh`](https://github.com/SemiAnalysisAI/InferenceX/blob/main/benchmarks/multi_node/agentic_srt.sh) from `/infmax-workspace`, which is the InferenceX agentic-coding client stack. That stack is not vendored by `srt-slurm` or by this repository, so it requires an InferenceX checkout that `srtctl` mounts through `INFMAX_WORKSPACE`:
+
+```bash
+# Enter the same shared filesystem used above.
+git clone --recurse-submodules https://github.com/SemiAnalysisAI/InferenceX.git
+export INFMAX_WORKSPACE=/path/to/InferenceX
+```
+
+Clone with `--recurse-submodules`. `agentic_srt.sh` sources `benchmarks/benchmark_lib.sh`, which installs the `utils/agentic-benchmark` requirements along with `-e utils/aiperf`, and `utils/aiperf` is a submodule. `INFMAX_WORKSPACE` is a host path bind-mounted into the container, so it must resolve on the compute nodes rather than only on the login node.
+
+`srtctl dry-run` reports the resolved mount, and flags the variable when it is missing. Without it the job fails with exit 127 once the workers have finished loading, so the dry-run is worth the extra step here:
+
+```bash
+uv run srtctl dry-run -f "${RECIPES_PATH}/recipes/single-node/DeepSeek-V4-Pro/B200/sglang/agentic/agg-b200-fp4-tp8-hicache-mtp-agentic.yaml"
+```
+
+Single-node AgentX recipes hold one serving configuration with its published concurrencies as `zip_override_conc` variants. Submit the whole curve, or a single published point by index:
+
+```bash
+uv run srtctl apply -f "${RECIPES_PATH}/recipes/single-node/DeepSeek-V4-Pro/B200/sglang/agentic/agg-b200-fp4-tp8-hicache-mtp-agentic.yaml"
+uv run srtctl apply -f "${RECIPES_PATH}/recipes/single-node/DeepSeek-V4-Pro/B200/sglang/agentic/agg-b200-fp4-tp8-hicache-mtp-agentic.yaml:zip_override_conc[0]"
+```
+
+See the [multi-node](multi-node/AGENTX.md) and [single-node](single-node/AGENTX.md) AgentX indexes for the full recipe list and their InferenceX sources.
+
 ### Supported Recipes
 
 Please refer to the [support matrix](../README.md#support-matrix) to view all recipes that are supported. Clicking on the &#9989; icon will take you to the directory containing recipes.

@@ -54,8 +54,8 @@ backend:
   trtllm_config:
     aggregated:
       backend: "pytorch"
-      tensor_parallel_size: "{tp}"
-      pipeline_parallel_size: "{pp}"
+      tensor_parallel_size: 8
+      pipeline_parallel_size: 1
       moe_expert_parallel_size: "{ep}"
       enable_attention_dp: true
       attention_dp_config:
@@ -97,7 +97,4 @@ benchmark:
   custom_tokenizer: "sa_bench_tokenizers.sglang_deepseek_v4.SGLangDeepseekV4Tokenizer"
 
 sweep:
-  tp: [1, 2, 4, 8]
-  pp: [1, 2, 4, 8]
-  dp: [1, 2, 4, 8]
   ep: [1, 2, 4, 8]

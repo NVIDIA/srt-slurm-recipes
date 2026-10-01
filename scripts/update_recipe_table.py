@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Update the recipe availability table in README.md."""
+"""Update the recipe availability table in README.md.
+
+This table covers the fixed-ISL/OSL (1k1k, 8k1k) recipes only. AgentX recipes
+live under `agentic/` directories and are indexed by
+`scripts/update_agentx_table.py`, so they are skipped here — otherwise a
+platform whose only coverage is agentic would advertise a checkmark that links
+to a directory holding no fixed-ISL recipe.
+"""
 
 from __future__ import annotations
 
@@ -35,40 +42,23 @@ NODE_TITLES = {
     "single-node": "Single-Node",
 }
 GREEN_CHECK = "&#9989;"
-YELLOW_CAUTION = "&#9888;&#65039;"
 EM_DASH = "&#10134;"
 
+# A cell is either a checkmark linking to recipes or a dash. There is no
+# "in progress" state: the table reports what this repository holds today, and a
+# reader cannot act on a cell either way, so a planned recipe and one that will
+# never exist read the same.
+PLATFORM_NA_TITLE = "Not available on this platform"
+
 # (model, gpu-column) cells that cannot run on a single node — the weights don't
-# fit in one node's HBM, so the deployment must span multiple nodes. These render
-# as a dash (linking to the multi-node recipe when one exists) in the
-# single-node table instead of the "in progress" caution marker.
+# fit in one node's HBM, so the deployment must span multiple nodes. Their dash
+# links to the multi-node recipe and says as much on hover.
 MULTINODE_ONLY = {
     ("DeepSeek-R1", HOPPER_GPUS_STR),
     ("DeepSeek-V4-Pro", HOPPER_GPUS_STR),
     ("Kimi-K2.5", HOPPER_GPUS_STR),
 }
 MULTINODE_ONLY_TITLE = "Does not fit on a single node — use the multi-node recipe"
-
-# (model, gpu-column) cells in the multi-node table that are not supported on a
-# given platform. These render as a dash (no link) instead of the "in progress"
-# caution marker.
-PLATFORM_NA = {
-    ("GLM-5", BLACKWELL_GPUS_STR),
-    ("GLM-5", HOPPER_GPUS_STR),
-    ("MiniMax-M2.5", HOPPER_GPUS_STR),
-    # gpt-oss-120b fits on a single node; multi-node serving is not offered on
-    # these platforms.
-    ("gpt-oss-120b", BLACKWELL_GPUS_STR),
-    ("gpt-oss-120b", HOPPER_GPUS_STR),
-    ("DeepSeek-V4-Pro", BLACKWELL_GPUS_STR),
-    # Kimi-K2.5 multi-node serving is only offered on Grace-Blackwell.
-    ("Kimi-K2.5", BLACKWELL_GPUS_STR),
-    ("Kimi-K2.5", HOPPER_GPUS_STR),
-    # MiniMax-M3 multi-node serving is only offered on Grace-Blackwell.
-    ("MiniMax-M3", BLACKWELL_GPUS_STR),
-    ("MiniMax-M3", HOPPER_GPUS_STR),
-}
-PLATFORM_NA_TITLE = "Not supported on this platform"
 
 # Grace-Blackwell (GB200 / GB300) systems are rack-scale, so they are only
 # represented in the Multi-Node table. The Single-Node table never shows a
@@ -103,6 +93,10 @@ GPU_COLUMN_GROUPS = {
 
 GPU_COLUMN_ORDER = (GRACE_BLACKWELL_GPUS_STR, BLACKWELL_GPUS_STR, HOPPER_GPUS_STR)
 
+# AgentX recipes live in directories with this name and belong to the AgentX
+# table instead.
+AGENTIC_DIR_NAME = "agentic"
+
 
 @dataclass(frozen=True)
 class RecipeRow:
@@ -112,7 +106,7 @@ class RecipeRow:
     precision: str | None
     gpu: str
     gpu_dir: Path
-    has_recipe_dirs: bool
+    has_fixed_isl: bool
 
 
 def split_precision(model_name: str) -> tuple[str, str | None]:
@@ -132,6 +126,14 @@ def sort_key(value: str, preferred_order: tuple[str, ...]) -> tuple[int, str]:
 def relative_link(path: Path) -> str:
     relative = path.relative_to(REPO_ROOT).as_posix()
     return quote(relative + "/", safe="/-._")
+
+
+def has_fixed_isl_recipes(gpu_dir: Path) -> bool:
+    """Whether this platform holds a recipe that the fixed-ISL table covers."""
+    return any(
+        AGENTIC_DIR_NAME not in path.relative_to(gpu_dir).parts
+        for path in gpu_dir.rglob("*.yaml")
+    )
 
 
 def discover_recipe_rows() -> list[RecipeRow]:
@@ -164,9 +166,7 @@ def discover_recipe_rows() -> list[RecipeRow]:
                         precision=precision,
                         gpu=gpu_dir.name,
                         gpu_dir=gpu_dir,
-                        has_recipe_dirs=any(
-                            path.is_dir() for path in gpu_dir.iterdir()
-                        ),
+                        has_fixed_isl=has_fixed_isl_recipes(gpu_dir),
                     )
                 )
 
@@ -184,7 +184,7 @@ def gpu_column(gpu: str) -> str:
 
 
 def cell_link_path(rows: list[RecipeRow]) -> Path | None:
-    available = [row for row in rows if row.has_recipe_dirs]
+    available = [row for row in rows if row.has_fixed_isl]
     if not available:
         return None
     if len(available) == 1:
@@ -203,7 +203,7 @@ def gpu_cell(
     if link_path is not None:
         href = escape(relative_link(link_path), quote=True)
         precisions = sorted(
-            {row.precision for row in rows if row.has_recipe_dirs and row.precision}
+            {row.precision for row in rows if row.has_fixed_isl and row.precision}
         )
         label = f' {escape(" / ".join(precisions))}' if precisions else ""
         return f'<a href="{href}">{GREEN_CHECK}</a>{label}'
@@ -215,11 +215,8 @@ def gpu_cell(
             return f'<a href="{href}" title="{title}">{EM_DASH}</a>'
         return f'<span title="{title}">{EM_DASH}</span>'
 
-    if node_count == "multi-node" and (model, column) in PLATFORM_NA:
-        title = escape(PLATFORM_NA_TITLE, quote=True)
-        return f'<span title="{title}">{EM_DASH}</span>'
-
-    return YELLOW_CAUTION
+    title = escape(PLATFORM_NA_TITLE, quote=True)
+    return f'<span title="{title}">{EM_DASH}</span>'
 
 
 def render_node_table(
@@ -228,7 +225,7 @@ def render_node_table(
     multinode_links: dict[tuple[str, str], Path],
 ) -> list[str]:
     models = sorted(
-        {row.base_model for row in rows if row.has_recipe_dirs},
+        {row.base_model for row in rows if row.has_fixed_isl},
         key=str.lower,
     )
     if not models:

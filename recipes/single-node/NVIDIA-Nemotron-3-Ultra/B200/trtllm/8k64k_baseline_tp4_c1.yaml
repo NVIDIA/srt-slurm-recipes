@@ -1,0 +1,73 @@
+name: nemotron-ultra-nvfp4-b200-trtllm-8k64k-baseline-tp4-c1
+model:
+  path: hf:nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  container: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0-dev.1-cuda13
+  precision: fp4
+identity:
+  model:
+    repo: nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  container:
+    image: nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.3.0-dev.1-cuda13
+dynamo:
+  install: false
+slurm:
+  partition: batch
+  time_limit: 04:00:00
+health_check:
+  max_attempts: 540
+  interval_seconds: 10
+resources:
+  gpu_type: b200
+  gpus_per_node: 4
+  agg_nodes: 1
+  agg_workers: 1
+  gpus_per_agg: 4
+frontend:
+  type: dynamo
+  enable_multiple_frontends: false
+backend:
+  type: trtllm
+  aggregated_environment:
+    HF_MODULES_CACHE: /tmp/hf_modules
+    PYTHONUNBUFFERED: '1'
+    DYN_HEALTH_CHECK_ENABLED: 'false'
+    TLLM_LOG_LEVEL: INFO
+    TRTLLM_USE_MAMBA_REPLAY: '1'
+    TLLM_SPEC_DECODE_FORCE_NUM_ACCEPTED_TOKENS: '3.24'
+  trtllm_config:
+    aggregated:
+      backend: pytorch
+      tensor_parallel_size: 4
+      moe_expert_parallel_size: 1
+      pipeline_parallel_size: 1
+      max_batch_size: 1
+      max_num_tokens: 8256
+      max_seq_len: 73792
+      trust_remote_code: true
+      enable_attention_dp: false
+      cuda_graph_config:
+        enable_padding: true
+        max_batch_size: 1
+      kv_cache_config:
+        dtype: fp8
+        enable_block_reuse: false
+        free_gpu_memory_fraction: 0.5
+        mamba_ssm_cache_dtype: float16
+        mamba_ssm_philox_rounds: 5
+        mamba_ssm_stochastic_rounding: true
+      moe_config:
+        backend: TRTLLM
+      speculative_config:
+        decoding_type: MTP
+        num_nextn_predict_layers: 6
+      print_iter_log: true
+      stream_interval: 10
+      num_postprocess_workers: 4
+benchmark:
+  type: "sa-bench"
+  isl: 8192
+  osl: 65536
+  concurrencies: "1"
+  random_range_ratio: 1.0  # fixed ISL/OSL (sa-bench default 0.8 randomizes lengths)
+  num_prompts_mult: 4
+  num_warmup_mult: 0

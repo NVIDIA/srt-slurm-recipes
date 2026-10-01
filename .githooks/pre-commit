@@ -14,3 +14,20 @@ if ! git diff --quiet -- README.md; then
   echo "Stage README.md and retry the commit." >&2
   exit 1
 fi
+
+python3 scripts/update_agentx_table.py
+
+agentx_docs=(README.md recipes/multi-node/AGENTX.md recipes/single-node/AGENTX.md)
+
+if ! git diff --quiet -- "${agentx_docs[@]}"; then
+  echo "AgentX tables were updated by scripts/update_agentx_table.py." >&2
+  echo "Stage ${agentx_docs[*]}, then retry the commit." >&2
+  exit 1
+fi
+
+# The single-node AgentX recipes are generated from the InferenceX sources, so
+# they drift silently when either side changes. Only checkable with a checkout.
+if [ -f "${INFERENCEX_PATH:-../InferenceX}/configs/nvidia-master.yaml" ]; then
+  python3 scripts/generate_agentx_single_node.py \
+    --inferencex "${INFERENCEX_PATH:-../InferenceX}" --check
+fi

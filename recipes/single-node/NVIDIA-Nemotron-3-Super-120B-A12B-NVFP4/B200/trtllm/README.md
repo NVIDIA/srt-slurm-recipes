@@ -30,10 +30,11 @@ model:
 
 | file | ISL / OSL | parallelism sweep | max_seq_len |
 |---|---|---|---:|
-| `1k1k.yaml` | 1k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} | 2176 |
-| `8k1k.yaml` | 8k / 1k | TP · PP · EP ∈ {1, 2, 4, 8} | 9416 |
+| `1k1k.yaml` | 1k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} | 2176 |
+| `8k1k.yaml` | 8k / 1k | TP8 · PP1, EP ∈ {1, 2, 4, 8} | 9416 |
 
-Both recipes `sweep` over `tensor/pipeline/moe_expert_parallel_size` with
+Both recipes use TP8/PP1 so the engine world size matches the eight MPI ranks,
+and sweep `moe_expert_parallel_size` with
 `max_batch_size: 1024` and `max_num_tokens: 2176`. Benchmark concurrency sweeps
 `1 → 1024`, `random_range_ratio: 0.8`, `sa-bench`.
 
